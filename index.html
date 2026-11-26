@@ -9,6 +9,7 @@
   <title>StudyLoop</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="stats_view.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 </head>
@@ -192,6 +193,23 @@
             </span>
             <input type="checkbox" id="opt-redsheet" class="ios-switch">
           </label>
+
+          <div class="switch-col-block">
+            <label class="switch-row" for="opt-unordered" style="padding: 0; border: none;">
+              <span class="switch-text">
+                <span class="switch-title">順不同の入れ替え正答（赤文字入力）</span>
+                <span class="switch-sub">指定した区切りで並んだ空欄は順番が入れ替わっても◯</span>
+              </span>
+              <input type="checkbox" id="opt-unordered" class="ios-switch" checked>
+            </label>
+            <div id="unordered-delim-editor" class="delim-editor-box">
+              <div class="delim-editor-head">
+                <span class="muted-small">判別する区切り（スペース区切りで複数指定）</span>
+                <button type="button" id="btn-reset-delimiters" class="mini-link-btn">初期値に戻す</button>
+              </div>
+              <input type="text" id="input-unordered-delimiters" class="clean-input delim-input" placeholder="例: ・ 、 , ／ / と や">
+            </div>
+          </div>
         </div>
       </div>
 
@@ -222,6 +240,7 @@
     <section id="panel-stats" class="tab-panel">
       <div id="stats-container" class="kpi-grid"></div>
       <div id="category-stats-container" class="group-block"></div>
+      <div id="stats-detail-container" class="stats-detail-section"></div>
     </section>
 
     <!-- タブ4: 追加・CSV管理 -->
@@ -312,18 +331,22 @@
     <div id="swipe-edge-left" class="swipe-edge-zone left" aria-hidden="true">
       <div class="swipe-edge-pill">
         <span class="edge-symbol">×</span>
-        <span class="edge-label">まだ</span>
       </div>
     </div>
     <div id="swipe-edge-right" class="swipe-edge-zone right" aria-hidden="true">
       <div class="swipe-edge-pill">
         <span class="edge-symbol">◯</span>
-        <span class="edge-label">覚えた</span>
       </div>
     </div>
 
     <header class="study-topbar">
-      <button type="button" id="btn-exit-study" class="study-nav-btn">✕ 終了</button>
+      <div class="study-topbar-row">
+        <button type="button" id="btn-exit-study" class="study-nav-btn">✕ 終了</button>
+        <div class="study-tools">
+          <button type="button" id="btn-study-redsheet" class="redsheet-toggle-btn" title="赤シート切替">🟥 赤シート</button>
+          <button type="button" id="btn-undo" class="study-nav-btn undo-btn" title="1つ戻る">↩</button>
+        </div>
+      </div>
       <div class="progress-wrap">
         <div class="progress-track">
           <div id="progress-fill" class="progress-fill"></div>
@@ -332,10 +355,6 @@
           <span id="progress-text">1 / 1</span>
           <span id="study-phase-badge" class="phase-pill"></span>
         </div>
-      </div>
-      <div class="study-tools">
-        <button type="button" id="btn-study-redsheet" class="redsheet-toggle-btn" title="赤シート切替">🟥 赤シート</button>
-        <button type="button" id="btn-undo" class="study-nav-btn undo-btn" title="1つ戻る">↩</button>
       </div>
     </header>
 
@@ -365,8 +384,8 @@
     <!-- 中央フラッシュカード（スターもカード両面に配置して一緒に3D回転） -->
     <main id="study-main-area" class="study-main">
       <div id="card-stage" class="flashcard-wrapper">
-        <div id="swipe-badge-left" class="swipe-indicator left">× まだ</div>
-        <div id="swipe-badge-right" class="swipe-indicator right">◯ 覚えた</div>
+        <div id="swipe-badge-left" class="swipe-indicator left">×</div>
+        <div id="swipe-badge-right" class="swipe-indicator right">◯</div>
 
         <div id="card-flipper" class="flashcard-inner">
           <!-- 表面 -->
@@ -416,12 +435,18 @@
       <div id="choice-container" class="choice-grid hidden"></div>
 
       <div id="input-container" class="input-area hidden">
-        <div class="input-row">
-          <input type="text" id="answer-input" placeholder="答えを入力..." autocomplete="off">
-          <button type="button" id="btn-submit-answer" class="solid-action-btn primary">判定</button>
-        </div>
+        <div id="input-fields-list" class="input-fields-list"></div>
         <div id="input-feedback" class="input-feedback hidden"></div>
+        <button type="button" id="btn-submit-answer" class="solid-action-btn primary" style="width: 100%;">判定する</button>
         <button type="button" id="btn-input-next" class="solid-action-btn primary hidden" style="width: 100%;">次の問題へ</button>
+        <div id="input-self-judge" class="judge-row hidden">
+          <button type="button" id="btn-input-self-wrong" class="judge-btn wrong" aria-label="まだ">
+            <span class="judge-symbol">×</span>
+          </button>
+          <button type="button" id="btn-input-self-correct" class="judge-btn correct" aria-label="覚えた">
+            <span class="judge-symbol">◯</span>
+          </button>
+        </div>
       </div>
     </footer>
   </div>
@@ -459,6 +484,7 @@
   </div>
 
   <script src="storage.js"></script>
+  <script src="stats_view.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

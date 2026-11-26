@@ -24,7 +24,8 @@
     reviewQueue: [],
     reviewIndex: 0,
     isFlipped: false,
-    answeredCurrent: false
+    answeredCurrent: false,
+    animatingJudge: false
   };
 
   let currentFolderId = null;
@@ -472,6 +473,13 @@
         });
       }
     }
+
+    if (window.StudyStatsView && typeof window.StudyStatsView.render === 'function') {
+      window.StudyStatsView.render(deck, () => {
+        S.saveData(appData);
+        renderStatsTab();
+      });
+    }
   }
 
   function renderManageTab() {
@@ -572,6 +580,7 @@
     session.reviewIndex = 0;
     session.isFlipped = false;
     session.answeredCurrent = false;
+    session.animatingJudge = false;
 
     $('view-home').classList.add('hidden');
     $('view-deck').classList.add('hidden');
@@ -585,6 +594,8 @@
 
   function exitStudySession() {
     session.active = false;
+    session.animatingJudge = false;
+    document.body.classList.remove('input-cloze-hide');
     resetCardTransform(true);
     setStudyBehindVisible(true);
     $('view-study').classList.add('hidden');
@@ -618,15 +629,15 @@
 
     session.isFlipped = false;
     session.answeredCurrent = false;
+    session.animatingJudge = false;
 
     const isReview = session.phase === 'review';
     const cur = isReview ? session.reviewIndex + 1 : session.mainIndex + 1;
     const total = isReview ? session.reviewQueue.length : session.mainQueue.length;
     $('progress-fill').style.width = `${Math.min(100, Math.round((cur / total) * 100))}%`;
     $('progress-text').textContent = `${cur} / ${total}`;
-    $('study-phase-badge').textContent = isReview
-      ? ''
-      : (session.wrongPool.length > 0 ? `間違い蓄積: ${session.wrongPool.length}/5` : '');
+
+    $('study-phase-badge').textContent = '';
 
     syncPinButtons(card.pinned);
     $('front-cat-tag').textContent = card.category || '一般';
@@ -689,12 +700,15 @@
     $('choice-container').classList.toggle('hidden', settings.format !== 'choice');
     $('input-container').classList.toggle('hidden', settings.format !== 'input');
 
+    if (settings.format !== 'input') {
+      document.body.classList.remove('input-cloze-hide');
+    }
     if (settings.format === 'choice') renderMultipleChoice(card);
-    if (settings.format === 'input') prepareInputMode();
+    if (settings.format === 'input') prepareInputMode(card);
   }
 
   function flipCard(forceState) {
-    if (settings.format !== 'flip') return;
+    if (settings.format !== 'flip' && settings.format !== 'input') return;
     session.isFlipped = typeof forceState === 'boolean' ? forceState : !session.isFlipped;
     $('card-flipper').classList.toggle('is-flipped', session.isFlipped);
     haptic(12);
@@ -767,16 +781,192 @@
     });
   }
 
-  function prepareInputMode() {
-    const input = $('answer-input');
+  function getInputStructureForCard(card) {
+    if (!card) {
+      return { targets: [], groups: [], groupIndexBySlot: [] };
+    }
+    const sourceText = settings.reverse ? card.front : card.back;
+    const enabled = appData.unorderedEnabled !== false;
+    const delims = typeof appData.unorderedDelimiters === 'string'
+      ? appData.unorderedDelimiters
+      : S.DEFAULT_UNORDERED_DELIMITERS;
+    return S.extractClozeStructure(sourceText, enabled, delims);
+  }
+
+  function getCardLockedSet(card, totalCount) {
+    const raw = Array.isArray(card?.lockedIndices) ? card.lockedIndices : [];
+    const valid = raw.filter((n) => Number.isInteger(n) && n >= 0 && n < totalCount);
+    return new Set(valid);
+  }
+
+  function prepareInputMode(card) {
+    const list = $('input-fields-list');
     const fb = $('input-feedback');
+    const submitBtn = $('btn-submit-answer');
     const nextBtn = $('btn-input-next');
-    input.value = '';
-    input.disabled = false;
+    const selfJudge = $('input-self-judge');
+    if (!list) return;
+
+    // 解答中は回答欄の赤枠内テキストを隠したまま表裏回転できるようにする
+    document.body.classList.add('input-cloze-hide');
+
+    const structure = getInputStructureForCard(card);
+    const targets = structure.targets;
+    const groups = structure.groups;
+    const groupIndexBySlot = structure.groupIndexBySlot;
+    const count = Math.max(1, targets.length);
+    const isMulti = count > 1;
+    const lockedSet = getCardLockedSet(card, count);
+
+    list.innerHTML = '';
     fb.classList.add('hidden');
     nextBtn.classList.add('hidden');
-    $('btn-submit-answer').classList.remove('hidden');
-    setTimeout(() => input.focus(), 60);
+    selfJudge?.classList.add('hidden');
+    submitBtn.classList.remove('hidden');
+
+    const unorderedGroups = groups.filter((g) => g.indices.length > 1);
+    if (unorderedGroups.length > 0) {
+      const note = document.createElement('div');
+      note.className = 'unordered-group-note';
+      note.textContent = '⇄ マークの空欄は順不同で正答になります（カードタップで回転可）';
+      list.appendChild(note);
+    }
+
+    const inputs = [];
+    const lockBtns = [];
+
+    const updateSubmitAndHints = () => {
+      const activeCount = count - lockedSet.size;
+      if (activeCount === 0) {
+        submitBtn.textContent = '答えを確認（全枠ロック中）';
+      } else if (lockedSet.size > 0) {
+        submitBtn.textContent = `判定する（対象 ${activeCount}/${count}箇所）`;
+      } else {
+        submitBtn.textContent = isMulti ? `判定する（全${count}箇所）` : '判定する';
+      }
+
+      inputs.forEach((inp, idx) => {
+        const hasNextActive = inputs.slice(idx + 1).some((el) => !el.disabled);
+        inp.enterKeyHint = hasNextActive ? 'next' : 'done';
+      });
+    };
+
+    const applyRowLockVisual = (idx) => {
+      const isLocked = lockedSet.has(idx);
+      const inp = inputs[idx];
+      const lBtn = lockBtns[idx];
+      const gIdx = groupIndexBySlot[idx] ?? 0;
+      const isSlotUnordered = (groups[gIdx]?.indices.length || 0) > 1;
+      if (inp) {
+        inp.disabled = isLocked;
+        inp.classList.toggle('is-locked', isLocked);
+        inp.placeholder = isLocked
+          ? '🔒 ロック中（判定に含めない）'
+          : (isSlotUnordered
+              ? `赤文字 ${idx + 1}（順不同可）を入力...`
+              : (isMulti ? `赤文字 ${idx + 1} を入力...` : '赤文字の答えを入力...'));
+      }
+      if (lBtn) {
+        lBtn.textContent = isLocked ? '🔒' : '🔓';
+        lBtn.classList.toggle('is-locked', isLocked);
+        lBtn.title = isLocked ? 'ロック解除（判定に含める）' : 'ロック（判定に含めない）';
+        lBtn.setAttribute('aria-pressed', String(isLocked));
+      }
+    };
+
+    let multiGroupOrder = 0;
+    const multiGroupVisualMap = new Map();
+    groups.forEach((g, gi) => {
+      if (g.indices.length > 1) {
+        multiGroupVisualMap.set(gi, multiGroupOrder % 2);
+        multiGroupOrder += 1;
+      }
+    });
+
+    for (let i = 0; i < count; i++) {
+      const item = document.createElement('div');
+      item.className = 'input-field-item';
+
+      const row = document.createElement('div');
+      row.className = 'input-field-row';
+
+      const gIdx = groupIndexBySlot[i] ?? 0;
+      const isSlotUnordered = (groups[gIdx]?.indices.length || 0) > 1;
+
+      if (isMulti) {
+        const badge = document.createElement('span');
+        badge.className = 'input-index-badge';
+        if (isSlotUnordered) {
+          badge.classList.add('is-unordered');
+          if (multiGroupVisualMap.get(gIdx) === 1) {
+            badge.classList.add('group-alt');
+          }
+          badge.textContent = `${i + 1}⇄`;
+        } else {
+          badge.textContent = String(i + 1);
+        }
+        row.appendChild(badge);
+      }
+
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'cloze-answer-input';
+      inp.autocomplete = 'off';
+      inp.autocapitalize = 'off';
+      inp.spellcheck = false;
+
+      inp.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const nextActive = inputs.slice(i + 1).find((el) => !el.disabled);
+          if (nextActive) {
+            nextActive.focus();
+          } else {
+            checkTextAnswer();
+          }
+        }
+      });
+
+      const lockBtn = document.createElement('button');
+      lockBtn.type = 'button';
+      lockBtn.className = 'input-lock-btn';
+      lockBtn.addEventListener('click', () => {
+        if (session.answeredCurrent) return;
+        haptic(10);
+        if (lockedSet.has(i)) {
+          lockedSet.delete(i);
+        } else {
+          lockedSet.add(i);
+        }
+        card.lockedIndices = Array.from(lockedSet).sort((a, b) => a - b);
+        S.saveData(appData);
+        applyRowLockVisual(i);
+        updateSubmitAndHints();
+        if (!lockedSet.has(i)) {
+          inp.focus();
+        }
+      });
+
+      const mark = document.createElement('span');
+      mark.className = 'input-item-mark hidden';
+
+      row.appendChild(inp);
+      row.appendChild(lockBtn);
+      row.appendChild(mark);
+      item.appendChild(row);
+      list.appendChild(item);
+
+      inputs.push(inp);
+      lockBtns.push(lockBtn);
+      applyRowLockVisual(i);
+    }
+
+    updateSubmitAndHints();
+
+    const firstActive = inputs.find((el) => !el.disabled);
+    if (firstActive) {
+      setTimeout(() => firstActive.focus(), 60);
+    }
   }
 
   function normalizeAnswerString(str) {
@@ -791,23 +981,157 @@
     if (!card || session.answeredCurrent) return;
     session.answeredCurrent = true;
 
-    const userVal = normalizeAnswerString($('answer-input').value);
-    const targets = settings.reverse ? [card.front] : S.extractClozeTargets(card.back);
-    const isCorrect = targets.some((t) => normalizeAnswerString(t) === userVal && userVal.length > 0);
+    // 判定時に回答欄の隠しを解除して正解を表示
+    document.body.classList.remove('input-cloze-hide');
 
-    haptic(isCorrect ? 15 : 35);
-    $('answer-input').disabled = true;
+    const structure = getInputStructureForCard(card);
+    const targets = structure.targets;
+    const groups = structure.groups;
+    const items = Array.from($('input-fields-list')?.querySelectorAll('.input-field-item') || []);
+    const isMulti = targets.length > 1;
+    const lockedSet = getCardLockedSet(card, targets.length);
+
+    let activeTotal = 0;
+    let activeCorrect = 0;
+
+    // 各スロットの判定結果: { status: 'locked' | 'ok' | 'ng', displayAnswer: string }
+    const slotResults = new Array(targets.length).fill(null);
+
+    groups.forEach((group) => {
+      // グループ内のロックされていない正解候補プールを作成
+      const remainingPool = [];
+      group.indices.forEach((slotIdx) => {
+        const rawTarget = targets[slotIdx];
+        const cleanAns = rawTarget.replace(/^\${1,2}|\${1,2}$/g, '');
+        if (lockedSet.has(slotIdx)) {
+          slotResults[slotIdx] = { status: 'locked', displayAnswer: cleanAns };
+        } else {
+          remainingPool.push({
+            slotIdx,
+            norm: normalizeAnswerString(rawTarget),
+            cleanAns
+          });
+        }
+      });
+
+      // 回答対象スロットを順に照合（順不同グループならどれと一致してもOK、ただし重複使用不可）
+      const unmatchedSlots = [];
+      group.indices.forEach((slotIdx) => {
+        if (lockedSet.has(slotIdx)) return;
+        activeTotal += 1;
+
+        const item = items[slotIdx];
+        const inp = item?.querySelector('.cloze-answer-input');
+        const rawUser = inp ? inp.value : '';
+        const normUser = normalizeAnswerString(rawUser);
+
+        if (normUser.length > 0) {
+          const matchPos = remainingPool.findIndex((cand) => cand.norm === normUser);
+          if (matchPos !== -1) {
+            const matched = remainingPool.splice(matchPos, 1)[0];
+            activeCorrect += 1;
+            slotResults[slotIdx] = { status: 'ok', displayAnswer: matched.cleanAns };
+            return;
+          }
+        }
+        unmatchedSlots.push(slotIdx);
+      });
+
+      // 不正解だったスロットに、グループ内で使われなかった正解候補を割り当てる
+      unmatchedSlots.forEach((slotIdx, uIdx) => {
+        const fallbackCand = remainingPool[uIdx] || remainingPool[0];
+        const cleanAns = fallbackCand
+          ? fallbackCand.cleanAns
+          : targets[slotIdx].replace(/^\${1,2}|\${1,2}$/g, '');
+        slotResults[slotIdx] = { status: 'ng', displayAnswer: cleanAns };
+      });
+    });
+
+    targets.forEach((_, idx) => {
+      const res = slotResults[idx];
+      const item = items[idx];
+      const inp = item?.querySelector('.cloze-answer-input');
+      const lockBtn = item?.querySelector('.input-lock-btn');
+      const mark = item?.querySelector('.input-item-mark');
+
+      if (lockBtn) lockBtn.disabled = true;
+
+      if (res.status === 'locked') {
+        if (inp) {
+          inp.disabled = true;
+          inp.classList.add('is-locked-result');
+        }
+        if (mark) {
+          mark.classList.remove('hidden', 'ok', 'ng', 'locked');
+          mark.classList.add('locked');
+          mark.textContent = '🔒';
+        }
+        if (item) {
+          const noteLine = document.createElement('div');
+          noteLine.className = 'input-item-correct-hint is-locked-note' + (isMulti ? '' : ' no-badge');
+          noteLine.textContent = `判定除外（答え: ${res.displayAnswer}）`;
+          item.appendChild(noteLine);
+        }
+        return;
+      }
+
+      const ok = res.status === 'ok';
+      if (inp) {
+        inp.disabled = true;
+        inp.classList.add(ok ? 'is-ok' : 'is-ng');
+      }
+      if (mark) {
+        mark.classList.remove('hidden', 'ok', 'ng', 'locked');
+        mark.classList.add(ok ? 'ok' : 'ng');
+        mark.textContent = ok ? '◯' : '×';
+      }
+      if (!ok && item) {
+        const hintLine = document.createElement('div');
+        hintLine.className = 'input-item-correct-hint' + (isMulti ? '' : ' no-badge');
+        hintLine.textContent = `正解: ${res.displayAnswer}`;
+        item.appendChild(hintLine);
+      }
+    });
+
     $('btn-submit-answer').classList.add('hidden');
     $('card-flipper').classList.add('is-flipped');
 
     const fb = $('input-feedback');
-    fb.classList.remove('hidden', 'ok', 'ng');
-    fb.classList.add(isCorrect ? 'ok' : 'ng');
-    fb.textContent = isCorrect ? '◯ 正解' : `× 正解: ${targets.join(' / ')}`;
+    fb.classList.remove('hidden', 'ok', 'ng', 'neutral');
+
+    if (activeTotal === 0) {
+      haptic(12);
+      fb.classList.add('neutral');
+      fb.textContent = '🔒 全枠ロック中：裏面の答えを確認して記録してください';
+      const selfJudge = $('input-self-judge');
+      selfJudge?.classList.remove('hidden');
+      const wBtn = $('btn-input-self-wrong');
+      const cBtn = $('btn-input-self-correct');
+      if (wBtn) wBtn.onclick = () => animateButtonJudge(false);
+      if (cBtn) cBtn.onclick = () => animateButtonJudge(true);
+      return;
+    }
+
+    const isAllCorrect = activeCorrect === activeTotal;
+    const lockedCount = lockedSet.size;
+    haptic(isAllCorrect ? 15 : 35);
+
+    fb.classList.add(isAllCorrect ? 'ok' : 'ng');
+    const lockNote = lockedCount > 0 ? `（${lockedCount}箇所ロック除外）` : '';
+    if (activeTotal > 1) {
+      fb.textContent = isAllCorrect
+        ? `◯ 対象${activeTotal}箇所 正解！${lockNote}`
+        : `× 対象${activeTotal}箇所中 ${activeCorrect}箇所 正解${lockNote}`;
+    } else {
+      fb.textContent = isAllCorrect
+        ? `◯ 正解！${lockNote}`
+        : `× 不正解${lockNote}`;
+    }
 
     const nextBtn = $('btn-input-next');
     nextBtn.classList.remove('hidden');
-    nextBtn.onclick = () => recordAnswer(isCorrect);
+    nextBtn.onclick = () => recordAnswer(isAllCorrect);
+    setTimeout(() => nextBtn.focus(), 60);
   }
 
   function recordAnswer(isCorrect) {
@@ -938,6 +1262,51 @@
   }
 
   /* ==================== カードスワイプ＆横面ハイライト制御 ==================== */
+  function animateButtonJudge(isCorrect) {
+    if (!session.active || session.animatingJudge || session.answeredCurrent) return;
+    session.animatingJudge = true;
+    haptic(isCorrect ? 14 : 20);
+
+    const cardEl = $('card-stage');
+    const leftBadge = $('swipe-badge-left');
+    const rightBadge = $('swipe-badge-right');
+    const leftEdge = $('swipe-edge-left');
+    const rightEdge = $('swipe-edge-right');
+
+    if (cardEl) {
+      cardEl.classList.remove('spring-back', 'swiping-left', 'swiping-right');
+      cardEl.classList.add(isCorrect ? 'swiping-right' : 'swiping-left', 'btn-fly-out');
+      const dir = isCorrect ? 1 : -1;
+      cardEl.style.transform = `translate3d(${dir * 460}px, 24px, 0) rotate(${dir * 16}deg)`;
+      cardEl.style.opacity = '0.12';
+    }
+
+    if (isCorrect) {
+      if (rightBadge) {
+        rightBadge.style.opacity = '0.92';
+        rightBadge.classList.add('is-ready');
+      }
+      if (rightEdge) {
+        rightEdge.style.opacity = '0.75';
+        rightEdge.classList.add('is-ready');
+      }
+    } else {
+      if (leftBadge) {
+        leftBadge.style.opacity = '0.92';
+        leftBadge.classList.add('is-ready');
+      }
+      if (leftEdge) {
+        leftEdge.style.opacity = '0.75';
+        leftEdge.classList.add('is-ready');
+      }
+    }
+
+    setTimeout(() => {
+      session.animatingJudge = false;
+      recordAnswer(isCorrect);
+    }, 240);
+  }
+
   function resetCardTransform(instant = false) {
     const cardEl = $('card-stage');
     const leftBadge = $('swipe-badge-left');
@@ -946,17 +1315,19 @@
     const rightEdge = $('swipe-edge-right');
     if (!cardEl) return;
 
-    cardEl.classList.remove('swiping-left', 'swiping-right');
+    cardEl.classList.remove('swiping-left', 'swiping-right', 'btn-fly-out');
 
     if (instant) {
       cardEl.classList.remove('spring-back');
       cardEl.style.transition = 'none';
       cardEl.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
+      cardEl.style.opacity = '1';
       void cardEl.offsetWidth;
       cardEl.style.transition = '';
     } else {
       cardEl.classList.add('spring-back');
       cardEl.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
+      cardEl.style.opacity = '1';
     }
 
     if (leftBadge) {
@@ -1057,11 +1428,11 @@
           leftBadge.classList.toggle('is-ready', dx < 0 && isReady);
         }
         if (rightEdge) {
-          rightEdge.style.opacity = dx > 0 ? String(Math.min(1, ratio * 1.15)) : '0';
+          rightEdge.style.opacity = dx > 0 ? String(Math.min(0.8, ratio * 0.85)) : '0';
           rightEdge.classList.toggle('is-ready', dx > 0 && isReady);
         }
         if (leftEdge) {
-          leftEdge.style.opacity = dx < 0 ? String(Math.min(1, ratio * 1.15)) : '0';
+          leftEdge.style.opacity = dx < 0 ? String(Math.min(0.8, ratio * 0.85)) : '0';
           leftEdge.classList.toggle('is-ready', dx < 0 && isReady);
         }
       }
@@ -1093,7 +1464,7 @@
     cardEl.addEventListener('click', (e) => {
       if (Date.now() < suppressFlipUntil) return;
       const cloze = e.target.closest('.cloze-blank');
-      if (cloze && settings.redsheet) {
+      if (cloze && settings.redsheet && !(settings.format === 'input' && !session.answeredCurrent)) {
         cloze.classList.toggle('revealed');
         haptic(10);
         return;
@@ -1349,6 +1720,36 @@
       applyThemeAndRedsheet();
     });
 
+    const syncUnorderedOptionUI = () => {
+      const enabled = appData.unorderedEnabled !== false;
+      const optEl = $('opt-unordered');
+      const editorEl = $('unordered-delim-editor');
+      const inpEl = $('input-unordered-delimiters');
+      if (optEl) optEl.checked = enabled;
+      if (editorEl) editorEl.classList.toggle('hidden', !enabled);
+      if (inpEl) inpEl.value = appData.unorderedDelimiters ?? S.DEFAULT_UNORDERED_DELIMITERS;
+    };
+    syncUnorderedOptionUI();
+
+    $('opt-unordered')?.addEventListener('change', (e) => {
+      appData.unorderedEnabled = e.target.checked;
+      S.saveData(appData);
+      syncUnorderedOptionUI();
+      haptic(8);
+    });
+
+    $('input-unordered-delimiters')?.addEventListener('input', (e) => {
+      appData.unorderedDelimiters = e.target.value;
+      S.saveData(appData);
+    });
+
+    $('btn-reset-delimiters')?.addEventListener('click', () => {
+      appData.unorderedDelimiters = S.DEFAULT_UNORDERED_DELIMITERS;
+      S.saveData(appData);
+      syncUnorderedOptionUI();
+      haptic(10);
+    });
+
     // 試験日
     $('exam-date')?.addEventListener('change', (e) => {
       appData.examDate = e.target.value;
@@ -1400,14 +1801,8 @@
       $('hint-text').classList.toggle('hidden');
     });
 
-    $('btn-wrong')?.addEventListener('click', () => {
-      haptic(20);
-      recordAnswer(false);
-    });
-    $('btn-correct')?.addEventListener('click', () => {
-      haptic(14);
-      recordAnswer(true);
-    });
+    $('btn-wrong')?.addEventListener('click', () => animateButtonJudge(false));
+    $('btn-correct')?.addEventListener('click', () => animateButtonJudge(true));
 
     $('btn-start-review')?.addEventListener('click', () => {
       $('review-interstitial').classList.add('hidden');
@@ -1420,9 +1815,6 @@
 
     // 赤文字入力判定
     $('btn-submit-answer')?.addEventListener('click', checkTextAnswer);
-    $('answer-input')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') checkTextAnswer();
-    });
 
     // 一覧シート
     $('sheet-redsheet-toggle')?.addEventListener('click', () => {
@@ -1456,7 +1848,19 @@
 
     // 管理タブ：AI指示文コピー・一括インポート
     $('btn-copy-prompt')?.addEventListener('click', async () => {
-      const promptText = `この内容からテスト対策用の単語カードを作成してください。\n赤シート機能で隠せるよう、重要な語句や公式は【 】で囲んでください。\n数式や化学式はLaTeX形式（インラインは $...$ 、大きな式は $$...$$ ）で記述してください。\n出力は以下の形式で、1行につき1問のコードブロックのみを出力してください（前後の挨拶不要）。\n\nカテゴリ名 | 問題文（表面） | 【重要語句や数式】を含む答え（裏面） | ヒント`;
+      const unorderedEnabled = appData.unorderedEnabled !== false;
+      const rawDelims = typeof appData.unorderedDelimiters === 'string' && appData.unorderedDelimiters.trim()
+        ? appData.unorderedDelimiters.trim()
+        : S.DEFAULT_UNORDERED_DELIMITERS;
+      const delimTokens = rawDelims.split(/[\s　]+/).filter(Boolean);
+      const sampleDelim = delimTokens[0] || '・';
+      const delimListText = delimTokens.join(' ');
+
+      const unorderedRule = unorderedEnabled && delimTokens.length > 0
+        ? `\n順不同（順番が入れ替わっても正答になる並列語句）にしたい場合は、【語句A】${sampleDelim}【語句B】のように、判別可能な区切り（${delimListText}）だけでつないでください（順番を固定したい空欄は、助詞や句読点・他の文言を挟んでください）。`
+        : '';
+
+      const promptText = `この内容からテスト対策用の単語カードを作成してください。\n赤シート機能で隠せるよう、重要な語句や公式は【 】で囲んでください。${unorderedRule}\n数式や化学式はLaTeX形式（インラインは $...$ 、大きな式は $$...$$ ）で記述してください。\n出力は以下の形式で、1行につき1問のコードブロックのみを出力してください（前後の挨拶不要）。\n\nカテゴリ名 | 問題文（表面） | 【重要語句や数式】を含む答え（裏面） | ヒント`;
       try {
         await navigator.clipboard.writeText(promptText);
         $('btn-copy-prompt').textContent = 'コピー完了！';
@@ -1563,10 +1967,10 @@
           flipCard();
         } else if (e.key === 'ArrowRight') {
           e.preventDefault();
-          recordAnswer(true);
+          animateButtonJudge(true);
         } else if (e.key === 'ArrowLeft') {
           e.preventDefault();
-          recordAnswer(false);
+          animateButtonJudge(false);
         }
       }
     });

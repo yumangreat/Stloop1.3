@@ -7,12 +7,16 @@
     return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
   }
 
+  const DEFAULT_UNORDERED_DELIMITERS = '・ 、 , ／ / と や および 及び ならびに 並びに または 又は';
+
   function createDefaultData() {
     const deckId = uid('deck');
     return {
       activeDeckId: deckId,
       examDate: '',
       theme: 'light',
+      unorderedEnabled: true,
+      unorderedDelimiters: DEFAULT_UNORDERED_DELIMITERS,
       folders: [],
       decks: [
         {
@@ -77,7 +81,10 @@
       wrongCount: Number(raw.wrongCount || raw.wrong || 0),
       pinned: Boolean(raw.pinned),
       srsLevel: Number(raw.srsLevel || 0),
-      nextReview: Number(raw.nextReview || 0)
+      nextReview: Number(raw.nextReview || 0),
+      lockedIndices: Array.isArray(raw.lockedIndices)
+        ? raw.lockedIndices.map(Number).filter((n) => Number.isInteger(n) && n >= 0)
+        : []
     };
   }
 
@@ -151,6 +158,12 @@
           if (!parsed.decks.some((d) => d.id === parsed.activeDeckId)) {
             parsed.activeDeckId = parsed.decks[0].id;
           }
+          if (typeof parsed.unorderedEnabled !== 'boolean') {
+            parsed.unorderedEnabled = true;
+          }
+          if (typeof parsed.unorderedDelimiters !== 'string') {
+            parsed.unorderedDelimiters = DEFAULT_UNORDERED_DELIMITERS;
+          }
           return parsed;
         }
       }
@@ -209,15 +222,90 @@
     }
   }
 
-  function extractClozeTargets(backText) {
-    const matches = [];
+  function normalizeDelimiterToken(str) {
+    return String(str || '')
+      .replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+      .replace(/･/g, '・')
+      .replace(/、/g, ',')
+      .replace(/[\s　]+/g, '')
+      .toLowerCase();
+  }
+
+  function parseDelimiterSet(delimitersStr) {
+    const tokens = String(delimitersStr || '')
+      .split(/[\s　]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const normSet = new Set();
+    tokens.forEach((t) => {
+      const n = normalizeDelimiterToken(t);
+      if (n) normSet.add(n);
+    });
+    return normSet;
+  }
+
+  function extractClozeStructure(backText, unorderedEnabled = true, delimitersStr = DEFAULT_UNORDERED_DELIMITERS) {
+    const source = String(backText || '');
     const regex = /【([\s\S]*?)】/g;
+    const rawMatches = [];
     let m;
-    while ((m = regex.exec(backText || '')) !== null) {
+    while ((m = regex.exec(source)) !== null) {
       const val = m[1].trim();
-      if (val) matches.push(val);
+      if (val) {
+        rawMatches.push({
+          text: val,
+          start: m.index,
+          end: m.index + m[0].length
+        });
+      }
     }
-    return matches.length > 0 ? matches : [String(backText || '').trim()];
+
+    if (rawMatches.length === 0) {
+      const fallback = source.trim();
+      return {
+        targets: [fallback],
+        groups: [{ indices: [0], separator: '' }],
+        groupIndexBySlot: [0]
+      };
+    }
+
+    const targets = rawMatches.map((item) => item.text);
+    const delimSet = unorderedEnabled ? parseDelimiterSet(delimitersStr) : new Set();
+
+    const groups = [];
+    const groupIndexBySlot = [];
+
+    rawMatches.forEach((item, idx) => {
+      if (idx === 0) {
+        groups.push({ indices: [0], separator: '' });
+        groupIndexBySlot.push(0);
+        return;
+      }
+
+      const prev = rawMatches[idx - 1];
+      const betweenRaw = source.slice(prev.end, item.start);
+      const betweenTrimmed = betweenRaw.trim();
+      const betweenNorm = normalizeDelimiterToken(betweenTrimmed);
+
+      if (unorderedEnabled && betweenNorm.length > 0 && delimSet.has(betweenNorm)) {
+        const currentGroupIdx = groups.length - 1;
+        groups[currentGroupIdx].indices.push(idx);
+        if (!groups[currentGroupIdx].separator) {
+          groups[currentGroupIdx].separator = betweenTrimmed;
+        }
+        groupIndexBySlot.push(currentGroupIdx);
+      } else {
+        const newGroupIdx = groups.length;
+        groups.push({ indices: [idx], separator: '' });
+        groupIndexBySlot.push(newGroupIdx);
+      }
+    });
+
+    return { targets, groups, groupIndexBySlot };
+  }
+
+  function extractClozeTargets(backText) {
+    return extractClozeStructure(backText, false).targets;
   }
 
   function parseImportText(rawText) {
@@ -523,8 +611,10 @@
     loadData,
     saveData,
     normalizeCard,
+    DEFAULT_UNORDERED_DELIMITERS,
     formatCardHtml,
     renderContent,
+    extractClozeStructure,
     extractClozeTargets,
     parseImportText,
     generateDeckCsvText,
