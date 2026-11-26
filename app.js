@@ -25,6 +25,7 @@
     reviewIndex: 0,
     isFlipped: false,
     answeredCurrent: false,
+    awaitingSelfJudge: false,
     animatingJudge: false
   };
 
@@ -580,6 +581,7 @@
     session.reviewIndex = 0;
     session.isFlipped = false;
     session.answeredCurrent = false;
+    session.awaitingSelfJudge = false;
     session.animatingJudge = false;
 
     $('view-home').classList.add('hidden');
@@ -629,6 +631,7 @@
 
     session.isFlipped = false;
     session.answeredCurrent = false;
+    session.awaitingSelfJudge = false;
     session.animatingJudge = false;
 
     const isReview = session.phase === 'review';
@@ -1087,13 +1090,14 @@
 
     if (activeTotal === 0) {
       haptic(12);
+      session.awaitingSelfJudge = true;
       fb.classList.add('hidden');
       const selfJudge = $('input-self-judge');
       selfJudge?.classList.remove('hidden');
       const wBtn = $('btn-input-self-wrong');
       const cBtn = $('btn-input-self-correct');
-      if (wBtn) wBtn.onclick = () => animateButtonJudge(false);
-      if (cBtn) cBtn.onclick = () => animateButtonJudge(true);
+      if (wBtn) wBtn.onclick = () => animateButtonJudge(false, true);
+      if (cBtn) cBtn.onclick = () => animateButtonJudge(true, true);
       return;
     }
 
@@ -1248,8 +1252,9 @@
   }
 
   /* ==================== カードスワイプ＆横面ハイライト制御 ==================== */
-  function animateButtonJudge(isCorrect) {
-    if (!session.active || session.animatingJudge || session.answeredCurrent) return;
+  function animateButtonJudge(isCorrect, allowSelfJudge = false) {
+    if (!session.active || session.animatingJudge || (session.answeredCurrent && !allowSelfJudge)) return;
+    session.awaitingSelfJudge = false;
     session.animatingJudge = true;
     haptic(isCorrect ? 14 : 20);
 
@@ -1432,7 +1437,7 @@
         suppressFlipUntil = Date.now() + 350;
         const threshold = Math.max(100, cardEl.clientWidth * 0.28);
 
-        if (settings.format === 'flip' && Math.abs(currentX) >= threshold) {
+        if ((settings.format === 'flip' || session.awaitingSelfJudge) && Math.abs(currentX) >= threshold) {
           const isRight = currentX > 0;
           haptic(18);
           cardEl.classList.add('spring-back');
