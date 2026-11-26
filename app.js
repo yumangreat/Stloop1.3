@@ -1058,12 +1058,6 @@
           mark.classList.add('locked');
           mark.textContent = '🔒';
         }
-        if (item) {
-          const noteLine = document.createElement('div');
-          noteLine.className = 'input-item-correct-hint is-locked-note' + (isMulti ? '' : ' no-badge');
-          noteLine.textContent = `判定除外（答え: ${res.displayAnswer}）`;
-          item.appendChild(noteLine);
-        }
         return;
       }
 
@@ -1089,12 +1083,11 @@
     $('card-flipper').classList.add('is-flipped');
 
     const fb = $('input-feedback');
-    fb.classList.remove('hidden', 'ok', 'ng', 'neutral');
+    fb.classList.remove('ok', 'ng', 'neutral');
 
     if (activeTotal === 0) {
       haptic(12);
-      fb.classList.add('neutral');
-      fb.textContent = '🔒 全枠ロック中：裏面の答えを確認して記録してください';
+      fb.classList.add('hidden');
       const selfJudge = $('input-self-judge');
       selfJudge?.classList.remove('hidden');
       const wBtn = $('btn-input-self-wrong');
@@ -1108,6 +1101,7 @@
     const lockedCount = lockedSet.size;
     haptic(isAllCorrect ? 15 : 35);
 
+    fb.classList.remove('hidden');
     fb.classList.add(isAllCorrect ? 'ok' : 'ng');
     const lockNote = lockedCount > 0 ? `（${lockedCount}箇所ロック除外）` : '';
     if (activeTotal > 1) {
