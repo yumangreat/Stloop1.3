@@ -45,55 +45,53 @@
   function applyThemeAndRedsheet() {
     document.body.classList.toggle('dark', appData.theme === 'dark');
     document.body.classList.toggle('redsheet-on', settings.redsheet);
-    const optBtn = $('opt-redsheet');
-    if (optBtn) {
-      optBtn.textContent = `赤シート: ${settings.redsheet ? 'ON' : 'OFF'}`;
-      optBtn.classList.toggle('active', settings.redsheet);
+
+    const themeBtn = $('btn-theme');
+    if (themeBtn) {
+      themeBtn.textContent = appData.theme === 'dark' ? '☀️' : '🌙';
     }
+
+    const optRed = $('opt-redsheet');
+    if (optRed) {
+      optRed.checked = settings.redsheet;
+    }
+
     const studyBtn = $('btn-study-redsheet');
     if (studyBtn) {
       studyBtn.classList.toggle('active', settings.redsheet);
     }
   }
 
-  /* ==================== URLからの共有・一括引越し受信 ==================== */
-  async function checkIncomingShareHash() {
-    const hash = window.location.hash || '';
-    if (!hash.startsWith('#share=') && !hash.startsWith('#bundle=')) return;
+  function escapeText(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
 
-    try {
-      if (hash.startsWith('#share=')) {
-        const token = hash.slice(7);
-        const sharedDeck = await S.decodeSharePayload(token);
-        if (sharedDeck && sharedDeck.cards.length > 0) {
-          appData.decks.push(sharedDeck);
-          appData.activeDeckId = sharedDeck.id;
-          S.saveData(appData);
-          alert(`共有された単語帳「${sharedDeck.title}」（${sharedDeck.cards.length}問）を追加しました！`);
-        }
-      } else if (hash.startsWith('#bundle=')) {
-        const token = hash.slice(8);
-        const bundle = await S.decodeFullBundlePayload(token);
-        if (bundle && bundle.decks.length > 0) {
-          const totalCards = bundle.decks.reduce((sum, d) => sum + d.cards.length, 0);
-          const ok = confirm(`引越しデータ（${bundle.decks.length}個の単語帳 / 計${totalCards}問）が見つかりました。\n現在の端末に取り込みますか？`);
-          if (ok) {
-            appData.decks.push(...bundle.decks);
-            appData.activeDeckId = bundle.decks[0].id;
-            if (bundle.examDate && !appData.examDate) {
-              appData.examDate = bundle.examDate;
-            }
-            S.saveData(appData);
-            alert(`${bundle.decks.length}個の単語帳を一括で取り込みました！`);
-          }
-        }
+  function downloadCsvFile(csvText, filename) {
+    const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function readCsvFileWithEncoding(file, callback) {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = String(ev.target.result || '');
+      if (text.includes('\uFFFD')) {
+        const sjisReader = new FileReader();
+        sjisReader.onload = (ev2) => callback(String(ev2.target.result || ''));
+        sjisReader.readAsText(file, 'Shift_JIS');
+      } else {
+        callback(text);
       }
-    } catch (e) {
-      console.warn('Share/Bundle decode failed:', e);
-      alert('共有URLの読み込みに失敗しました。URLが途中で切れていないか確認してください。');
-    } finally {
-      history.replaceState(null, '', window.location.pathname + window.location.search);
-    }
+    };
+    reader.readAsText(file, 'UTF-8');
   }
 
   /* ==================== 第1段階：ホーム画面（単語帳一覧） ==================== */
@@ -123,10 +121,10 @@
           <div class="deck-card-title">${escapeText(deck.title)}</div>
           <span class="deck-card-count">${total}問</span>
         </div>
-        <div class="deck-card-bar">
-          <div class="deck-card-bar-fill" style="width: ${pct}%;"></div>
+        <div class="progress-slim">
+          <div class="progress-slim-fill" style="width: ${pct}%;"></div>
         </div>
-        <div class="deck-card-meta">
+        <div class="deck-card-footer">
           <span>定着率 ${pct}%（${mastered}/${total}）</span>
           <span>苦手・★ ${weak}問</span>
         </div>
@@ -139,13 +137,6 @@
     });
   }
 
-  function escapeText(str) {
-    return String(str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-  }
-
   /* ==================== 第2段階：デッキ詳細画面 ==================== */
   function openDeckView(deckId) {
     appData.activeDeckId = deckId;
@@ -155,7 +146,6 @@
     $('view-home').classList.add('hidden');
     $('view-study').classList.add('hidden');
     $('view-deck').classList.remove('hidden');
-    $('share-output').classList.add('hidden');
 
     refreshDeckHeaderAndFilters();
     switchTab('setup');
@@ -166,7 +156,6 @@
     if (!deck) return;
     $('current-deck-title').textContent = deck.title;
 
-    // カテゴリ一覧を抽出
     const filterSel = $('category-filter');
     if (filterSel) {
       const cats = Array.from(new Set(deck.cards.map((c) => c.category || '一般')));
@@ -208,7 +197,7 @@
     const targets = getFilteredCards(deck);
     countSpan.textContent = String(targets.length);
     startBtn.disabled = targets.length === 0;
-    startBtn.style.opacity = targets.length === 0 ? '0.5' : '1';
+    startBtn.style.opacity = targets.length === 0 ? '0.45' : '1';
   }
 
   function updateExamCountdown() {
@@ -238,7 +227,7 @@
   }
 
   function switchTab(tabName) {
-    document.querySelectorAll('.tab-btn').forEach((btn) => {
+    document.querySelectorAll('.seg-tab').forEach((btn) => {
       btn.classList.toggle('active', btn.dataset.tab === tabName);
     });
     document.querySelectorAll('.tab-panel').forEach((panel) => {
@@ -287,8 +276,8 @@
 
     container.innerHTML = `
       <div class="stat-box"><div class="stat-val">${total}</div><div class="stat-lbl">総問題数</div></div>
-      <div class="stat-box"><div class="stat-val">${mastered}</div><div class="stat-lbl">定着済み</div></div>
-      <div class="stat-box"><div class="stat-val">${weak}</div><div class="stat-lbl">苦手・★ピン</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:var(--cta);">${mastered}</div><div class="stat-lbl">定着済み</div></div>
+      <div class="stat-box"><div class="stat-val" style="color:var(--wrong);">${weak}</div><div class="stat-lbl">苦手・★ピン</div></div>
       <div class="stat-box"><div class="stat-val">${acc}%</div><div class="stat-lbl">通算正答率</div></div>
     `;
 
@@ -298,7 +287,7 @@
         catBox.classList.add('hidden');
       } else {
         catBox.classList.remove('hidden');
-        catBox.innerHTML = '<h3 class="section-label">単元別の定着状況</h3>';
+        catBox.innerHTML = '<div class="group-heading">単元別の定着状況</div>';
         cats.forEach((cat) => {
           const items = deck.cards.filter((c) => (c.category || '一般') === cat);
           const m = items.filter((c) => c.correctCount > 0 && c.correctCount >= c.wrongCount).length;
@@ -310,8 +299,8 @@
               <span>${escapeText(cat)}</span>
               <span>${m} / ${items.length}問 (${pct}%)</span>
             </div>
-            <div class="deck-card-bar">
-              <div class="deck-card-bar-fill" style="width: ${pct}%;"></div>
+            <div class="progress-slim">
+              <div class="progress-slim-fill" style="width: ${pct}%;"></div>
             </div>
           `;
           catBox.appendChild(row);
@@ -343,13 +332,13 @@
 
       const editBtn = document.createElement('button');
       editBtn.type = 'button';
-      editBtn.className = 'btn-icon';
+      editBtn.className = 'icon-circle-btn small';
       editBtn.textContent = '✎';
       editBtn.addEventListener('click', () => openEditModal(card));
 
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
-      delBtn.className = 'btn-icon';
+      delBtn.className = 'icon-circle-btn small danger';
       delBtn.textContent = '×';
       delBtn.addEventListener('click', () => {
         if (!confirm('このカードを削除しますか？')) return;
@@ -439,6 +428,14 @@
     return deck.cards.find((c) => c.id === cardId) || null;
   }
 
+  function syncPinButtons(isPinned) {
+    [$('btn-pin-front'), $('btn-pin-back')].forEach((btn) => {
+      if (!btn) return;
+      btn.textContent = isPinned ? '★' : '☆';
+      btn.classList.toggle('pinned', isPinned);
+    });
+  }
+
   function renderCurrentStudyCard() {
     const card = getCurrentCard();
     if (!card) {
@@ -449,7 +446,6 @@
     session.isFlipped = false;
     session.answeredCurrent = false;
 
-    // 進捗表示
     const isReview = session.phase === 'review';
     const cur = isReview ? session.reviewIndex + 1 : session.mainIndex + 1;
     const total = isReview ? session.reviewQueue.length : session.mainQueue.length;
@@ -459,12 +455,12 @@
       ? '復習中'
       : (session.wrongPool.length > 0 ? `間違い蓄積: ${session.wrongPool.length}/5` : '');
 
-    // ピン留め状態
-    const pinBtn = $('btn-pin');
-    pinBtn.textContent = card.pinned ? '★' : '☆';
-    pinBtn.classList.toggle('pinned', card.pinned);
+    // 両面のスター状態＆カテゴリタグを同期
+    syncPinButtons(card.pinned);
+    $('front-cat-tag').textContent = card.category || '一般';
+    $('back-cat-tag').textContent = card.category || '一般';
 
-    // 表裏のバッジ＆テキスト切り替え（A→Qバグ修正済み）
+    // 表裏のバッジ＆テキスト切り替え
     const frontBadge = $('front-badge');
     const backBadge = $('back-badge');
     if (settings.reverse) {
@@ -485,7 +481,7 @@
     S.renderContent($('front-content'), frontText);
     S.renderContent($('back-content'), backText);
 
-    // 画像（元の問題側＝通常時は表面、逆向き時は裏面）
+    // 画像
     const fImg = $('front-image');
     const bImg = $('back-image');
     if (card.image && !settings.reverse) {
@@ -501,7 +497,7 @@
       bImg.classList.add('hidden');
     }
 
-    // ヒント（表面側でいつでも確認可能）
+    // ヒント
     const hintBtn = $('btn-hint');
     const hintBox = $('hint-text');
     hintBox.classList.add('hidden');
@@ -512,11 +508,11 @@
       hintBtn.classList.add('hidden');
     }
 
-    // 3Dフリップと座標をトランジションなしで即座にリセット
+    // 3Dフリップと座標をリセット
     const flipper = $('card-flipper');
     flipper.style.transition = 'none';
     flipper.classList.remove('is-flipped');
-    void flipper.offsetWidth; // リフロー強制
+    void flipper.offsetWidth;
     flipper.style.transition = '';
 
     resetCardTransform(true);
@@ -769,7 +765,7 @@
     renderCurrentStudyCard();
   }
 
-  /* ==================== カードスワイプ制御（バグ修正・誤操作防止） ==================== */
+  /* ==================== カードスワイプ制御 ==================== */
   function resetCardTransform(instant = false) {
     const cardEl = $('card-stage');
     const leftBadge = $('swipe-badge-left');
@@ -893,19 +889,46 @@
     });
   }
 
-  /* ==================== URL出力ヘルパー ==================== */
-  function showGeneratedUrl(boxEl, url, label, extraNote = '') {
-    if (!boxEl) return;
-    boxEl.classList.remove('hidden');
-    boxEl.innerHTML = `
-      <div style="font-weight:700; margin-bottom:4px; color:var(--primary);">
-        ${label}（${url.length.toLocaleString()}文字）${extraNote}
-      </div>
-      <div style="user-select:all; -webkit-user-select:all;">${escapeText(url)}</div>
-    `;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(url).catch(() => {});
-    }
+  /* ==================== CSV読み込み共通処理 ==================== */
+  function handleCsvFileUpload(file, contextMode) {
+    readCsvFileWithEncoding(file, (text) => {
+      const result = S.parseCsvAuto(text);
+      if (result.type === 'backup' && result.decks.length > 0) {
+        const totalCards = result.decks.reduce((s, d) => s + d.cards.length, 0);
+        const replace = confirm(
+          `全データバックアップCSV（${result.decks.length}個の単語帳 / 計${totalCards}問）を検出しました。\n` +
+          `「OK」＝ 現在のデータに追加して取り込む\n` +
+          `「キャンセル」＝ 取り込みを中止`
+        );
+        if (!replace) return;
+        appData.decks.push(...result.decks);
+        if (result.examDate && !appData.examDate) {
+          appData.examDate = result.examDate;
+        }
+        S.saveData(appData);
+        if (contextMode === 'home') {
+          renderHomeDeckList();
+        } else {
+          refreshDeckHeaderAndFilters();
+          renderManageTab();
+        }
+        alert(`${result.decks.length}個の単語帳（計${totalCards}問）を復元しました！`);
+      } else if (result.type === 'cards' && result.cards.length > 0) {
+        const deck = getActiveDeck();
+        if (!deck) return;
+        deck.cards.push(...result.cards);
+        S.saveData(appData);
+        if (contextMode === 'home') {
+          renderHomeDeckList();
+        } else {
+          refreshDeckHeaderAndFilters();
+          renderManageTab();
+        }
+        alert(`「${deck.title}」に ${result.cards.length}問 を追加しました！`);
+      } else {
+        alert('CSVから読み込める問題が見つかりませんでした。\n「見本CSVをDL」から形式を確認してください。');
+      }
+    });
   }
 
   /* ==================== イベント登録 ==================== */
@@ -928,33 +951,18 @@
       switchTab('manage');
     });
 
-    // ホーム画面：JSON読込
-    $('home-import-json')?.addEventListener('change', (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        try {
-          const parsed = JSON.parse(ev.target.result);
-          if (parsed && Array.isArray(parsed.decks) && parsed.decks.length > 0) {
-            appData = parsed;
-            S.saveData(appData);
-            renderHomeDeckList();
-            alert('バックアップを復元しました。');
-          }
-        } catch (_) {
-          alert('JSONファイルの読み込みに失敗しました。');
-        }
-      };
-      reader.readAsText(file);
+    // ホーム画面：全データCSVバックアップ＆復元
+    $('btn-home-export-csv')?.addEventListener('click', () => {
+      const csv = S.generateFullBackupCsvText(appData);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      downloadCsvFile(csv, `StudyLoop_全データバックアップ_${dateStr}.csv`);
     });
 
-    // ホーム画面：全データ一括引越しURL作成
-    $('btn-home-bundle-url')?.addEventListener('click', async () => {
-      const { token, imagesStripped } = await S.encodeFullBundlePayload(appData);
-      const url = `${window.location.origin}${window.location.pathname}#bundle=${token}`;
-      const note = imagesStripped ? ' ※画像が多いためテキストと学習履歴のみ圧縮しました' : '';
-      showGeneratedUrl($('home-share-box'), url, '全データ一括引越しURLをコピーしました', note);
+    $('home-import-csv')?.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      handleCsvFileUpload(file, 'home');
+      e.target.value = '';
     });
 
     // デッキ詳細画面：戻る・リネーム・削除
@@ -984,7 +992,7 @@
     });
 
     // タブ切替
-    document.querySelectorAll('.tab-btn').forEach((btn) => {
+    document.querySelectorAll('.seg-tab').forEach((btn) => {
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
 
@@ -995,37 +1003,38 @@
     });
 
     // 進行ルール選択
-    document.querySelectorAll('.mode-btn').forEach((btn) => {
+    document.querySelectorAll('.mode-row').forEach((btn) => {
       btn.addEventListener('click', () => {
+        haptic(8);
         settings.mode = btn.dataset.mode;
-        document.querySelectorAll('.mode-btn').forEach((b) => b.classList.toggle('active', b === btn));
+        document.querySelectorAll('.mode-row').forEach((b) => b.classList.toggle('active', b === btn));
         updateStartTargetCount();
       });
     });
 
     // 出題形式選択
-    document.querySelectorAll('.format-btn').forEach((btn) => {
+    document.querySelectorAll('.fmt-seg-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
+        haptic(8);
         settings.format = btn.dataset.format;
-        document.querySelectorAll('.format-btn').forEach((b) => b.classList.toggle('active', b === btn));
+        document.querySelectorAll('.fmt-seg-btn').forEach((b) => b.classList.toggle('active', b === btn));
       });
     });
 
-    // オプション切替
-    $('opt-reverse')?.addEventListener('click', (e) => {
-      settings.reverse = !settings.reverse;
-      e.currentTarget.textContent = settings.reverse ? '逆向き（A→Q）' : '通常（Q→A）';
-      e.currentTarget.classList.toggle('active', settings.reverse);
+    // オプション（トグルスイッチ）
+    $('opt-reverse')?.addEventListener('change', (e) => {
+      settings.reverse = e.target.checked;
+      haptic(8);
     });
 
-    $('opt-shuffle')?.addEventListener('click', (e) => {
-      settings.shuffle = !settings.shuffle;
-      e.currentTarget.textContent = settings.shuffle ? 'シャッフル' : '登録順';
-      e.currentTarget.classList.toggle('active', settings.shuffle);
+    $('opt-shuffle')?.addEventListener('change', (e) => {
+      settings.shuffle = e.target.checked;
+      haptic(8);
     });
 
-    $('opt-redsheet')?.addEventListener('click', () => {
-      settings.redsheet = !settings.redsheet;
+    $('opt-redsheet')?.addEventListener('change', (e) => {
+      settings.redsheet = e.target.checked;
+      haptic(8);
       applyThemeAndRedsheet();
     });
 
@@ -1061,15 +1070,17 @@
     });
     $('btn-undo')?.addEventListener('click', performSilentUndo);
 
-    $('btn-pin')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const card = getCurrentCard();
-      if (!card) return;
-      card.pinned = !card.pinned;
-      S.saveData(appData);
-      haptic(12);
-      $('btn-pin').textContent = card.pinned ? '★' : '☆';
-      $('btn-pin').classList.toggle('pinned', card.pinned);
+    // 表面・裏面両方のピン留めボタン
+    [$('btn-pin-front'), $('btn-pin-back')].forEach((btn) => {
+      btn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const card = getCurrentCard();
+        if (!card) return;
+        card.pinned = !card.pinned;
+        S.saveData(appData);
+        haptic(12);
+        syncPinButtons(card.pinned);
+      });
     });
 
     $('btn-hint')?.addEventListener('click', (e) => {
@@ -1107,13 +1118,36 @@
     });
     $('btn-print-sheet')?.addEventListener('click', () => window.print());
 
+    // 管理タブ：CSV操作
+    $('btn-download-sample-csv')?.addEventListener('click', () => {
+      downloadCsvFile(S.generateSampleCsvText(), 'StudyLoop_見本サンプル.csv');
+    });
+
+    $('btn-export-csv')?.addEventListener('click', () => {
+      const deck = getActiveDeck();
+      if (!deck) return;
+      downloadCsvFile(S.generateDeckCsvText(deck), `${deck.title}.csv`);
+    });
+
+    $('btn-export-all-csv')?.addEventListener('click', () => {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      downloadCsvFile(S.generateFullBackupCsvText(appData), `StudyLoop_全データバックアップ_${dateStr}.csv`);
+    });
+
+    $('import-csv-file')?.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      handleCsvFileUpload(file, 'deck');
+      e.target.value = '';
+    });
+
     // 管理タブ：AI指示文コピー・一括インポート
     $('btn-copy-prompt')?.addEventListener('click', async () => {
       const promptText = `この内容からテスト対策用の単語カードを作成してください。\n赤シート機能で隠せるよう、重要な語句や公式は【 】で囲んでください。\n数式や化学式はLaTeX形式（インラインは $...$ 、大きな式は $$...$$ ）で記述してください。\n出力は以下の形式で、1行につき1問のコードブロックのみを出力してください（前後の挨拶不要）。\n\nカテゴリ名 | 問題文（表面） | 【重要語句や数式】を含む答え（裏面） | ヒント`;
       try {
         await navigator.clipboard.writeText(promptText);
-        $('btn-copy-prompt').textContent = 'コピー完了';
-        setTimeout(() => { $('btn-copy-prompt').textContent = 'AI用指示文コピー'; }, 1500);
+        $('btn-copy-prompt').textContent = 'コピー完了！';
+        setTimeout(() => { $('btn-copy-prompt').textContent = '📋 AI用プロンプトコピー'; }, 1500);
       } catch (_) {
         prompt('以下をコピーしてください:', promptText);
       }
@@ -1179,101 +1213,6 @@
       renderManageTab();
     });
 
-    // CSV 書き出し・読み込み（UTF-8 / Shift-JIS自動判別対応）
-    $('btn-export-csv')?.addEventListener('click', () => {
-      const deck = getActiveDeck();
-      if (!deck) return;
-      const csvStr = S.generateCsvText(deck);
-      const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${deck.title}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-
-    $('import-csv-file')?.addEventListener('change', (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const handleCsvContent = (text) => {
-        const newCards = S.parseCsvText(text);
-        if (newCards.length === 0) {
-          alert('CSVから読み込める問題が見つかりませんでした。\n「カテゴリ,問題,答え,ヒント」の列構成になっているか確認してください。');
-          return;
-        }
-        const deck = getActiveDeck();
-        deck.cards.push(...newCards);
-        S.saveData(appData);
-        refreshDeckHeaderAndFilters();
-        renderManageTab();
-        alert(`CSVから ${newCards.length}問 を追加しました！`);
-      };
-
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const text = String(ev.target.result || '');
-        // Excel標準のShift-JISで文字化け（\uFFFD）が起きている場合は自動再読込
-        if (text.includes('\uFFFD')) {
-          const sjisReader = new FileReader();
-          sjisReader.onload = (ev2) => handleCsvContent(ev2.target.result);
-          sjisReader.readAsText(file, 'Shift_JIS');
-        } else {
-          handleCsvContent(text);
-        }
-      };
-      reader.readAsText(file, 'UTF-8');
-      e.target.value = '';
-    });
-
-    // JSON出力・読込
-    $('btn-export-json')?.addEventListener('click', () => {
-      const blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `studyloop_backup_${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    });
-
-    $('import-json-file')?.addEventListener('change', (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        try {
-          const parsed = JSON.parse(ev.target.result);
-          if (parsed && Array.isArray(parsed.decks) && parsed.decks.length > 0) {
-            appData = parsed;
-            S.saveData(appData);
-            refreshDeckHeaderAndFilters();
-            renderManageTab();
-            alert('バックアップを復元しました。');
-          }
-        } catch (_) {
-          alert('JSONファイルの読み込みに失敗しました。');
-        }
-      };
-      reader.readAsText(file);
-    });
-
-    // 圧縮URL共有・一括引越し
-    $('btn-share-url')?.addEventListener('click', async () => {
-      const deck = getActiveDeck();
-      if (!deck) return;
-      const token = await S.encodeSharePayload(deck);
-      const url = `${window.location.origin}${window.location.pathname}#share=${token}`;
-      showGeneratedUrl($('share-output'), url, 'この単語帳の共有URLをコピーしました');
-    });
-
-    $('btn-bundle-url')?.addEventListener('click', async () => {
-      const { token, imagesStripped } = await S.encodeFullBundlePayload(appData);
-      const url = `${window.location.origin}${window.location.pathname}#bundle=${token}`;
-      const note = imagesStripped ? ' ※画像が多いためテキストと学習履歴のみ圧縮しました' : '';
-      showGeneratedUrl($('share-output'), url, '全データ一括引越しURLをコピーしました', note);
-    });
-
     // 検索・モーダルイベント
     $('manage-search')?.addEventListener('input', renderManageTab);
 
@@ -1298,7 +1237,7 @@
       renderManageTab();
     });
 
-    // キーボード操作（PC/外付けキーボード対応）
+    // キーボード操作
     document.addEventListener('keydown', (e) => {
       if (!session.active) return;
       if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
@@ -1321,9 +1260,8 @@
   }
 
   /* ==================== 初期化 ==================== */
-  document.addEventListener('DOMContentLoaded', async () => {
+  document.addEventListener('DOMContentLoaded', () => {
     try {
-      await checkIncomingShareHash();
       applyThemeAndRedsheet();
       bindEvents();
       initCardSwipeAndFlip();

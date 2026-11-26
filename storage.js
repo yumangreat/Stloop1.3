@@ -35,7 +35,7 @@
               id: uid('c'),
               category: '物理',
               front: '真空中のクーロンの法則の比例定数 $k$ を含む静電気力 $F$ の式',
-              back: '【$$F = k\\frac{\vert{}q_1 q_2\vert{}}{r^2}$$】',
+              back: '【$$F = k\\frac{|q_1 q_2|}{r^2}$$】',
               hint: '距離 $r$ の2乗に反比例します。',
               image: '',
               correctCount: 0,
@@ -147,7 +147,7 @@
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (e) {
       console.error('Failed to save storage:', e);
-      alert('保存容量の上限に達しました。画像サイズを減らすか不要なデッキを削除してください。');
+      alert('保存容量の上限に達しました。画像サイズを減らすか不要な単語帳を削除してください。');
     }
   }
 
@@ -225,7 +225,7 @@
     return cards;
   }
 
-  /* ==================== CSV 読み込み・書き出し ==================== */
+  /* ==================== CSV 解析・生成（単体デッキ＆全データ完全バックアップ対応） ==================== */
   function parseCsvRows(text) {
     const clean = String(text || '').replace(/^\uFEFF/, '');
     const rows = [];
@@ -275,16 +275,125 @@
     return rows.filter((r) => r.some((c) => c.trim() !== ''));
   }
 
-  function parseCsvText(csvText) {
-    const rows = parseCsvRows(csvText);
-    if (rows.length === 0) return [];
+  function escapeCsvCell(val) {
+    const str = String(val ?? '');
+    if (/[",\r\n]/.test(str)) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  }
 
-    // 1行目がヘッダー行ならスキップ
-    const firstJoined = rows[0].join(',').toLowerCase();
+  // 1. 単一デッキ用の標準4列CSV（カテゴリ, 問題, 答え, ヒント）
+  function generateDeckCsvText(deck) {
+    const header = ['カテゴリ', '問題(Q)', '答え(A)', 'ヒント'].map(escapeCsvCell).join(',');
+    const lines = deck.cards.map((c) =>
+      [c.category, c.front, c.back, c.hint].map(escapeCsvCell).join(',')
+    );
+    return '\uFEFF' + [header, ...lines].join('\r\n');
+  }
+
+  // 2. サンプルCSV生成
+  function generateSampleCsvText() {
+    const rows = [
+      ['カテゴリ', '問題(Q)', '答え(A)', 'ヒント'],
+      ['英文法', 'apple の意味は？', '【りんご】', '赤い果物'],
+      ['日本史', '1192年に鎌倉幕府を開いた人物は？', '【源頼朝】', '平氏を滅ぼした'],
+      ['数学', '二次方程式 $ax^2+bx+c=0$ の解の公式', '【$$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$】', '判別式Dを使う']
+    ];
+    return '\uFEFF' + rows.map((r) => r.map(escapeCsvCell).join(',')).join('\r\n');
+  }
+
+  // 3. 全データ一括バックアップCSV（単語帳名＋学習成績まで完全保存）
+  function generateFullBackupCsvText(appData) {
+    const header = [
+      '単語帳名', 'カテゴリ', '問題(Q)', '答え(A)', 'ヒント',
+      '正解数', '誤答数', 'ピン留め', 'SRSレベル', '次回学習日時', '目標試験日'
+    ].map(escapeCsvCell).join(',');
+
+    const lines = [];
+    appData.decks.forEach((deck) => {
+      if (deck.cards.length === 0) {
+        lines.push([
+          deck.title, '一般', '', '', '',
+          0, 0, 0, 0, 0, appData.examDate || ''
+        ].map(escapeCsvCell).join(','));
+      } else {
+        deck.cards.forEach((c) => {
+          lines.push([
+            deck.title,
+            c.category,
+            c.front,
+            c.back,
+            c.hint,
+            c.correctCount,
+            c.wrongCount,
+            c.pinned ? 1 : 0,
+            c.srsLevel,
+            c.nextReview,
+            appData.examDate || ''
+          ].map(escapeCsvCell).join(','));
+        });
+      }
+    });
+
+    return '\uFEFF' + [header, ...lines].join('\r\n');
+  }
+
+  // 4. CSV自動判別インポート（全バックアップCSV / 4列CSV / 2列CSV すべてに対応）
+  function parseCsvAuto(csvText) {
+    const rows = parseCsvRows(csvText);
+    if (rows.length === 0) return { type: 'empty', cards: [], decks: [] };
+
+    const firstRow = rows[0].map((c) => c.trim());
+    const firstJoined = firstRow.join(',').toLowerCase();
+
+    // 全データ一括バックアップCSVの判定（「単語帳名」または9列以上）
+    if (firstRow[0] === '単語帳名' || firstRow.length >= 9) {
+      const dataRows = firstRow[0] === '単語帳名' ? rows.slice(1) : rows;
+      const deckMap = new Map();
+      let restoredExamDate = '';
+
+      for (const cols of dataRows) {
+        const deckTitle = (cols[0] || '復元された単語帳').trim();
+        if (!deckMap.has(deckTitle)) {
+          deckMap.set(deckTitle, {
+            id: uid('deck'),
+            title: deckTitle,
+            cards: []
+          });
+        }
+        const front = (cols[2] || '').trim();
+        const back = (cols[3] || '').trim();
+        if (cols[10] && cols[10].trim()) {
+          restoredExamDate = cols[10].trim();
+        }
+        if (front && back) {
+          deckMap.get(deckTitle).cards.push(normalizeCard({
+            category: cols[1] || '一般',
+            front,
+            back,
+            hint: cols[4] || '',
+            correctCount: Number(cols[5] || 0),
+            wrongCount: Number(cols[6] || 0),
+            pinned: cols[7] === '1' || String(cols[7]).toLowerCase() === 'true',
+            srsLevel: Number(cols[8] || 0),
+            nextReview: Number(cols[9] || 0)
+          }));
+        }
+      }
+
+      return {
+        type: 'backup',
+        decks: Array.from(deckMap.values()),
+        examDate: restoredExamDate
+      };
+    }
+
+    // 標準CSV（4列・3列・2列）
     const isHeader = ['カテゴリ', '問題', '表面', 'front', 'question', 'category'].some((kw) => firstJoined.includes(kw));
     const dataRows = isHeader ? rows.slice(1) : rows;
-
     const cards = [];
+
     for (const cols of dataRows) {
       if (cols.length < 2) continue;
       let category = '一般';
@@ -305,24 +414,8 @@
         cards.push(normalizeCard({ category, front, back, hint }));
       }
     }
-    return cards;
-  }
 
-  function escapeCsvCell(val) {
-    const str = String(val ?? '');
-    if (/[",\r\n]/.test(str)) {
-      return `"${str.replace(/"/g, '""')}"`;
-    }
-    return str;
-  }
-
-  function generateCsvText(deck) {
-    const header = ['カテゴリ', '表面（問題）', '裏面（答え）', 'ヒント'].map(escapeCsvCell).join(',');
-    const lines = deck.cards.map((c) =>
-      [c.category, c.front, c.back, c.hint].map(escapeCsvCell).join(',')
-    );
-    // Excelで文字化けしないようUTF-8 BOMを先頭に付与
-    return '\uFEFF' + [header, ...lines].join('\r\n');
+    return { type: 'cards', cards };
   }
 
   /* ==================== Undo 管理 ==================== */
@@ -339,145 +432,6 @@
     undoStack.length = 0;
   }
 
-  /* ==================== 圧縮URL エンコード・デコード ==================== */
-  function bytesToBase64Url(bytes) {
-    let bin = '';
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-    }
-    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
-
-  function base64UrlToBytes(b64url) {
-    let b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
-    while (b64.length % 4 !== 0) b64 += '=';
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return bytes;
-  }
-
-  async function compressStringToUrlToken(jsonStr) {
-    const rawBytes = new TextEncoder().encode(jsonStr);
-    if (typeof CompressionStream !== 'undefined') {
-      try {
-        const cs = new CompressionStream('deflate-raw');
-        const writer = cs.writable.getWriter();
-        writer.write(rawBytes);
-        writer.close();
-        const compressedBuf = await new Response(cs.readable).arrayBuffer();
-        return 'z_' + bytesToBase64Url(new Uint8Array(compressedBuf));
-      } catch (e) {
-        console.warn('CompressionStream fallback:', e);
-      }
-    }
-    return bytesToBase64Url(rawBytes);
-  }
-
-  async function decompressUrlTokenToString(token) {
-    if (token.startsWith('z_') && typeof DecompressionStream !== 'undefined') {
-      const compBytes = base64UrlToBytes(token.slice(2));
-      const ds = new DecompressionStream('deflate-raw');
-      const writer = ds.writable.getWriter();
-      writer.write(compBytes);
-      writer.close();
-      const rawBuf = await new Response(ds.readable).arrayBuffer();
-      return new TextDecoder().decode(rawBuf);
-    }
-    const rawBytes = base64UrlToBytes(token);
-    return new TextDecoder().decode(rawBytes);
-  }
-
-  // 単一デッキ共有URL生成
-  async function encodeSharePayload(deck) {
-    const minimal = {
-      t: deck.title,
-      c: deck.cards.map((card) => [card.category, card.front, card.back, card.hint])
-    };
-    return await compressStringToUrlToken(JSON.stringify(minimal));
-  }
-
-  async function decodeSharePayload(token) {
-    const json = await decompressUrlTokenToString(token);
-    const parsed = JSON.parse(json);
-    if (!parsed || !Array.isArray(parsed.c)) return null;
-    return {
-      id: uid('deck'),
-      title: String(parsed.t || '共有デッキ'),
-      cards: parsed.c.map((arr) => normalizeCard({
-        category: arr[0],
-        front: arr[1],
-        back: arr[2],
-        hint: arr[3]
-      }))
-    };
-  }
-
-  // 全データ一括引越しURL生成（学習履歴・試験日・複数デッキ丸ごと圧縮）
-  async function encodeFullBundlePayload(appData) {
-    const buildPayload = (includeImages) => ({
-      v: 2,
-      e: appData.examDate || '',
-      d: appData.decks.map((deck) => [
-        deck.title,
-        deck.cards.map((c) => [
-          c.category,
-          c.front,
-          c.back,
-          c.hint,
-          c.correctCount,
-          c.wrongCount,
-          c.pinned ? 1 : 0,
-          c.srsLevel,
-          c.nextReview,
-          includeImages ? (c.image || '') : ''
-        ])
-      ])
-    });
-
-    let imagesStripped = false;
-    let token = await compressStringToUrlToken(JSON.stringify(buildPayload(true)));
-
-    // URLが長すぎる場合（8000文字超）は画像を除いてテキスト＋成績のみ確実に圧縮
-    if (token.length > 8000) {
-      token = await compressStringToUrlToken(JSON.stringify(buildPayload(false)));
-      imagesStripped = true;
-    }
-
-    return { token, imagesStripped };
-  }
-
-  async function decodeFullBundlePayload(token) {
-    const json = await decompressUrlTokenToString(token);
-    const parsed = JSON.parse(json);
-    if (!parsed || !Array.isArray(parsed.d)) return null;
-
-    const decks = parsed.d.map((deckArr) => ({
-      id: uid('deck'),
-      title: String(deckArr[0] || '引越しデッキ'),
-      cards: Array.isArray(deckArr[1])
-        ? deckArr[1].map((cArr) => normalizeCard({
-            category: cArr[0],
-            front: cArr[1],
-            back: cArr[2],
-            hint: cArr[3],
-            correctCount: cArr[4] || 0,
-            wrongCount: cArr[5] || 0,
-            pinned: Boolean(cArr[6]),
-            srsLevel: cArr[7] || 0,
-            nextReview: cArr[8] || 0,
-            image: cArr[9] || ''
-          }))
-        : []
-    }));
-
-    return {
-      examDate: parsed.e || '',
-      decks
-    };
-  }
-
   window.StudyStorage = {
     uid,
     loadData,
@@ -487,14 +441,12 @@
     renderContent,
     extractClozeTargets,
     parseImportText,
-    parseCsvText,
-    generateCsvText,
+    generateDeckCsvText,
+    generateSampleCsvText,
+    generateFullBackupCsvText,
+    parseCsvAuto,
     pushUndo,
     popUndo,
-    clearUndo,
-    encodeSharePayload,
-    decodeSharePayload,
-    encodeFullBundlePayload,
-    decodeFullBundlePayload
+    clearUndo
   };
 })();
