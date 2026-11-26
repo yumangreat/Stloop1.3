@@ -824,14 +824,6 @@
     selfJudge?.classList.add('hidden');
     submitBtn.classList.remove('hidden');
 
-    const unorderedGroups = groups.filter((g) => g.indices.length > 1);
-    if (unorderedGroups.length > 0) {
-      const note = document.createElement('div');
-      note.className = 'unordered-group-note';
-      note.textContent = '⇄ マークの空欄は順不同で正答になります（カードタップで回転可）';
-      list.appendChild(note);
-    }
-
     const inputs = [];
     const lockBtns = [];
 
