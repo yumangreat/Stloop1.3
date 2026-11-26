@@ -1,4 +1,4 @@
-:root {
+ :root {
   --bg: #f3f5f9;
   --surface: #ffffff;
   --surface-tint: #f8fafc;
@@ -92,6 +92,11 @@ button {
 
 .hidden {
   display: none !important;
+}
+
+.invisible-behind {
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* ==================== 赤シート ==================== */
@@ -218,10 +223,149 @@ body.redsheet-on .cloze-blank.revealed .cloze-inner {
   color: var(--muted);
 }
 
+/* フォルダ内ナビゲーションバー */
+.folder-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 10px 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.folder-nav-center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.folder-nav-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--amber);
+}
+
+.folder-nav-title {
+  margin: 1px 0 0;
+  font-size: 1.05rem;
+  font-weight: 900;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* フォルダ一覧＆フォルダカード */
+.folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.folder-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 15px 18px;
+  box-shadow: var(--shadow-sm);
+  border: 1.5px solid var(--border);
+  border-left: 5px solid var(--amber);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.folder-card:active {
+  transform: scale(0.985);
+}
+
+.folder-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.folder-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: 1.3rem;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.folder-card-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.folder-card-title {
+  font-size: 1.02rem;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-card-meta {
+  margin-top: 2px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.folder-card-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.folder-deck-badge {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--amber);
+  background: var(--amber-soft);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.folder-chevron {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+/* 単語帳一覧＆カード */
 .deck-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.empty-folder-box {
+  background: var(--surface);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
 }
 
 .deck-card {
@@ -245,14 +389,23 @@ body.redsheet-on .cloze-blank.revealed .cloze-inner {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .deck-card-title {
+  flex: 1;
+  min-width: 0;
   font-size: 1.08rem;
   font-weight: 800;
   line-height: 1.4;
   word-break: break-word;
+}
+
+.deck-card-right-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .deck-card-count {
@@ -262,7 +415,17 @@ body.redsheet-on .cloze-blank.revealed .cloze-inner {
   background: var(--brand-soft);
   padding: 4px 11px;
   border-radius: 999px;
-  flex-shrink: 0;
+}
+
+.deck-move-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-tint);
+  display: grid;
+  place-items: center;
+  font-size: 0.82rem;
 }
 
 .progress-slim {
@@ -293,6 +456,12 @@ body.redsheet-on .cloze-blank.revealed .cloze-inner {
   margin-top: 4px;
 }
 
+.create-action-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .cta-primary-btn {
   width: 100%;
   padding: 16px 20px;
@@ -307,6 +476,22 @@ body.redsheet-on .cloze-blank.revealed .cloze-inner {
   justify-content: center;
   gap: 8px;
   box-shadow: 0 8px 20px rgba(37, 99, 235, 0.25);
+}
+
+.cta-folder-btn {
+  width: 100%;
+  padding: 13px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
 }
 
 .backup-bar {
@@ -331,6 +516,37 @@ body.redsheet-on .cloze-blank.revealed .cloze-inner {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+
+/* ==================== フォルダ移動モーダル内リスト ==================== */
+.folder-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+.folder-choice-item {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: var(--surface-tint);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.folder-choice-item.active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 800;
 }
 
 /* ==================== 第2段階：デッキ詳細画面 ==================== */
@@ -410,7 +626,7 @@ body.redsheet-on .cloze-blank.revealed .cloze-inner {
   display: flex;
 }
 
-/* メイン学習スタートCTA（エメラルドグリーンで視認性最大化） */
+/* メイン学習スタートCTA */
 .start-dock {
   position: sticky;
   top: 6px;
@@ -473,7 +689,7 @@ body.redsheet-on .cloze-blank.revealed .cloze-inner {
   color: var(--brand);
 }
 
-/* グループブロック（枠線ではなく余白とタイポグラフィで整理） */
+/* グループブロック */
 .group-block {
   display: flex;
   flex-direction: column;
@@ -735,28 +951,131 @@ body.dark .mode-icon.amber { background: #78350f; }
   position: relative;
 }
 
+/* スワイプ時の画面左右「横面」カラーハイライト */
+.swipe-edge-zone {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 44vw;
+  max-width: 240px;
+  pointer-events: none;
+  z-index: 35;
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  transition: opacity 0.08s linear;
+}
+
+.swipe-edge-zone.left {
+  left: 0;
+  justify-content: flex-start;
+  padding-left: max(10px, env(safe-area-inset-left));
+  border-left: 8px solid var(--wrong);
+  background: linear-gradient(90deg, rgba(225, 29, 72, 0.44) 0%, rgba(225, 29, 72, 0.14) 55%, rgba(225, 29, 72, 0) 100%);
+}
+
+.swipe-edge-zone.right {
+  right: 0;
+  justify-content: flex-end;
+  padding-right: max(10px, env(safe-area-inset-right));
+  border-right: 8px solid var(--correct);
+  background: linear-gradient(270deg, rgba(5, 150, 105, 0.44) 0%, rgba(5, 150, 105, 0.14) 55%, rgba(5, 150, 105, 0) 100%);
+}
+
+.swipe-edge-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 16px 14px;
+  border-radius: 20px;
+  color: #ffffff;
+  font-weight: 900;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.24);
+  transform: scale(0.92);
+  transition: transform 0.14s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.swipe-edge-zone.left .swipe-edge-pill {
+  background: var(--wrong);
+}
+
+.swipe-edge-zone.right .swipe-edge-pill {
+  background: var(--correct);
+}
+
+.swipe-edge-zone.is-ready .swipe-edge-pill {
+  transform: scale(1.08);
+}
+
+.edge-symbol {
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.edge-label {
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  writing-mode: horizontal-tb;
+}
+
+/* 上部ナビバー＆大きくなった赤シートボタン */
 .study-topbar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 40px;
+  gap: 8px;
+  height: 44px;
   flex-shrink: 0;
 }
 
 .study-nav-btn {
-  padding: 7px 11px;
-  border-radius: 10px;
+  height: 40px;
+  padding: 0 11px;
+  border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--surface);
   font-weight: 800;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
-.study-nav-btn.active {
+.study-nav-btn.undo-btn {
+  width: 40px;
+  padding: 0;
+  font-size: 1.05rem;
+}
+
+.redsheet-toggle-btn {
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 2px solid rgba(225, 29, 72, 0.38);
   background: var(--wrong-soft);
-  border-color: var(--wrong);
   color: var(--wrong);
+  font-weight: 900;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+
+.redsheet-toggle-btn:active {
+  transform: scale(0.96);
+}
+
+.redsheet-toggle-btn.active {
+  background: var(--wrong);
+  border-color: var(--wrong);
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(225, 29, 72, 0.32);
 }
 
 .progress-wrap {
@@ -796,6 +1115,7 @@ body.dark .mode-icon.amber { background: #78350f; }
 
 .study-tools {
   display: flex;
+  align-items: center;
   gap: 6px;
   flex-shrink: 0;
 }
@@ -821,6 +1141,16 @@ body.dark .mode-icon.amber { background: #78350f; }
   transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.flashcard-wrapper.swiping-left .card-face {
+  border-color: var(--wrong);
+  box-shadow: 0 12px 32px rgba(225, 29, 72, 0.25);
+}
+
+.flashcard-wrapper.swiping-right .card-face {
+  border-color: var(--correct);
+  box-shadow: 0 12px 32px rgba(5, 150, 105, 0.25);
+}
+
 .flashcard-inner {
   width: 100%;
   height: 100%;
@@ -838,7 +1168,7 @@ body.dark .mode-icon.amber { background: #78350f; }
   position: absolute;
   inset: 0;
   background: var(--surface);
-  border: 1.5px solid var(--border);
+  border: 2px solid var(--border);
   border-radius: 26px;
   box-shadow: var(--shadow-md);
   padding: 16px 20px;
@@ -847,6 +1177,7 @@ body.dark .mode-icon.amber { background: #78350f; }
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   overflow: hidden;
+  transition: border-color 0.12s, box-shadow 0.12s;
 }
 
 .card-face.card-front {
@@ -912,29 +1243,34 @@ body.dark .mode-icon.amber { background: #78350f; }
 
 .swipe-indicator {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 1.6rem;
+  top: 22%;
+  font-size: 1.7rem;
   font-weight: 900;
-  padding: 10px 20px;
-  border-radius: 16px;
+  padding: 12px 22px;
+  border-radius: 18px;
   opacity: 0;
   pointer-events: none;
   z-index: 25;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  transition: transform 0.12s ease;
 }
 
 .swipe-indicator.left {
-  left: 16px;
-  color: var(--wrong);
-  background: var(--wrong-soft);
-  border: 2px solid var(--wrong);
+  left: 14px;
+  color: #ffffff;
+  background: var(--wrong);
+  border: 2px solid #ffffff;
 }
 
 .swipe-indicator.right {
-  right: 16px;
-  color: var(--correct);
-  background: var(--correct-soft);
-  border: 2px solid var(--correct);
+  right: 14px;
+  color: #ffffff;
+  background: var(--correct);
+  border: 2px solid #ffffff;
+}
+
+.swipe-indicator.is-ready {
+  transform: scale(1.1);
 }
 
 .card-scroll-body {
@@ -974,13 +1310,6 @@ body.dark .mode-icon.amber { background: #78350f; }
   flex-shrink: 0;
 }
 
-.tap-guide {
-  font-size: 0.74rem;
-  font-weight: 700;
-  color: var(--muted);
-  opacity: 0.75;
-}
-
 .hint-btn {
   border: 1px solid var(--border);
   background: var(--amber-soft);
@@ -1015,21 +1344,14 @@ body.dark .mode-icon.amber { background: #78350f; }
   border-radius: 18px;
   border: 2px solid transparent;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
 }
 
 .judge-symbol {
-  font-size: 1.45rem;
+  font-size: 1.65rem;
   font-weight: 900;
   line-height: 1;
-}
-
-.judge-label {
-  font-size: 0.74rem;
-  font-weight: 800;
 }
 
 .judge-btn.wrong {
@@ -1343,6 +1665,12 @@ body.dark .mode-icon.amber { background: #78350f; }
   align-items: center;
   justify-content: center;
   padding: 20px;
+}
+
+.interstitial-overlay.solid-bg {
+  background: var(--bg);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .interstitial-box, .modal-card {

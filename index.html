@@ -14,7 +14,7 @@
 </head>
 <body>
 
-  <!-- ==================== 第1段階：ホーム（単語帳一覧） ==================== -->
+  <!-- ==================== 第1段階：ホーム（フォルダ・単語帳一覧） ==================== -->
   <div id="view-home" class="view-container">
     <header class="app-header">
       <div class="brand-wrap">
@@ -26,18 +26,42 @@
       </div>
     </header>
 
-    <section class="home-hero">
+    <!-- ルート表示時の見出し -->
+    <section id="home-hero" class="home-hero">
       <h1 class="hero-title">マイ単語帳</h1>
-      <p class="hero-sub">学習するデッキを選択してください</p>
+      <p id="home-hero-sub" class="hero-sub">学習するフォルダ・デッキを選択してください</p>
     </section>
 
+    <!-- フォルダ内表示時のナビゲーションヘッダー -->
+    <div id="folder-nav-bar" class="folder-nav-bar hidden">
+      <button type="button" id="btn-folder-back" class="nav-back-btn">‹ 一覧</button>
+      <div class="folder-nav-center">
+        <span class="folder-nav-badge">📁 フォルダ</span>
+        <h2 id="current-folder-title" class="folder-nav-title">フォルダ名</h2>
+      </div>
+      <div class="sub-header-tools">
+        <button type="button" id="btn-rename-folder" class="icon-circle-btn small" title="フォルダ名変更">✎</button>
+        <button type="button" id="btn-delete-folder" class="icon-circle-btn small danger" title="フォルダ削除">🗑</button>
+      </div>
+    </div>
+
+    <!-- フォルダ一覧 -->
+    <div id="home-folder-list" class="folder-list"></div>
+
+    <!-- 単語帳一覧 -->
     <div id="home-deck-list" class="deck-list"></div>
 
     <div class="home-bottom-actions">
-      <button type="button" id="btn-new-deck" class="cta-primary-btn">
-        <span class="cta-icon">＋</span>
-        <span>新しい単語帳を作成</span>
-      </button>
+      <div class="create-action-row" id="home-create-row">
+        <button type="button" id="btn-new-deck" class="cta-primary-btn">
+          <span class="cta-icon">＋</span>
+          <span>新しい単語帳を作成</span>
+        </button>
+        <button type="button" id="btn-new-folder" class="cta-folder-btn">
+          <span>📁</span>
+          <span>新しいフォルダを作成</span>
+        </button>
+      </div>
 
       <div class="backup-bar">
         <button type="button" id="btn-home-export-csv" class="outline-pill-btn">
@@ -57,6 +81,7 @@
       <button type="button" id="btn-back-home" class="nav-back-btn">‹ 一覧</button>
       <h2 id="current-deck-title" class="sub-header-title">デッキ名</h2>
       <div class="sub-header-tools">
+        <button type="button" id="btn-move-deck-folder" class="icon-circle-btn small" title="フォルダ移動">📁</button>
         <button type="button" id="btn-rename-deck" class="icon-circle-btn small" title="名前変更">✎</button>
         <button type="button" id="btn-delete-deck" class="icon-circle-btn small danger" title="削除">🗑</button>
       </div>
@@ -72,7 +97,7 @@
 
     <!-- タブ1: 学習設定 -->
     <main id="panel-setup" class="tab-panel active">
-      <!-- メイン開始CTA -->
+      <!-- メイン学習スタートCTA -->
       <div class="start-dock">
         <button type="button" id="btn-start-study" class="cta-start-btn">
           <span class="start-btn-main">学習をスタート</span>
@@ -283,6 +308,20 @@
 
   <!-- ==================== 第3段階：学習集中画面 ==================== -->
   <div id="view-study" class="study-screen hidden">
+    <!-- スワイプ時の左右横面カラーハイライト -->
+    <div id="swipe-edge-left" class="swipe-edge-zone left" aria-hidden="true">
+      <div class="swipe-edge-pill">
+        <span class="edge-symbol">×</span>
+        <span class="edge-label">まだ</span>
+      </div>
+    </div>
+    <div id="swipe-edge-right" class="swipe-edge-zone right" aria-hidden="true">
+      <div class="swipe-edge-pill">
+        <span class="edge-symbol">◯</span>
+        <span class="edge-label">覚えた</span>
+      </div>
+    </div>
+
     <header class="study-topbar">
       <button type="button" id="btn-exit-study" class="study-nav-btn">✕ 終了</button>
       <div class="progress-wrap">
@@ -295,13 +334,13 @@
         </div>
       </div>
       <div class="study-tools">
-        <button type="button" id="btn-study-redsheet" class="study-nav-btn" title="赤シート">赤</button>
-        <button type="button" id="btn-undo" class="study-nav-btn" title="1つ戻る">↩</button>
+        <button type="button" id="btn-study-redsheet" class="redsheet-toggle-btn" title="赤シート切替">🟥 赤シート</button>
+        <button type="button" id="btn-undo" class="study-nav-btn undo-btn" title="1つ戻る">↩</button>
       </div>
     </header>
 
-    <!-- 復習モード突入オーバーレイ -->
-    <div id="review-interstitial" class="interstitial-overlay hidden">
+    <!-- 復習モード突入オーバーレイ（単色背景で後ろを完全に隠す） -->
+    <div id="review-interstitial" class="interstitial-overlay solid-bg hidden">
       <div class="interstitial-box">
         <div class="interstitial-icon">🔁</div>
         <div class="interstitial-title">復習タイム</div>
@@ -324,10 +363,10 @@
     </div>
 
     <!-- 中央フラッシュカード（スターもカード両面に配置して一緒に3D回転） -->
-    <main class="study-main">
+    <main id="study-main-area" class="study-main">
       <div id="card-stage" class="flashcard-wrapper">
-        <div id="swipe-badge-left" class="swipe-indicator left">まだ</div>
-        <div id="swipe-badge-right" class="swipe-indicator right">覚えた</div>
+        <div id="swipe-badge-left" class="swipe-indicator left">× まだ</div>
+        <div id="swipe-badge-right" class="swipe-indicator right">◯ 覚えた</div>
 
         <div id="card-flipper" class="flashcard-inner">
           <!-- 表面 -->
@@ -344,7 +383,6 @@
             <div class="card-footer-slot">
               <button type="button" id="btn-hint" class="hint-btn hidden">💡 ヒントを見る</button>
               <div id="hint-text" class="hint-box hidden"></div>
-              <span class="tap-guide">カードをタップして裏返す</span>
             </div>
           </div>
 
@@ -359,24 +397,19 @@
               <img id="back-image" class="card-img hidden" alt="">
               <div id="back-content" class="card-text"></div>
             </div>
-            <div class="card-footer-slot">
-              <span class="tap-guide">← まだ　｜　覚えた →</span>
-            </div>
           </div>
         </div>
       </div>
     </main>
 
     <!-- 下部操作エリア -->
-    <footer class="study-bottom">
+    <footer id="study-bottom-area" class="study-bottom">
       <div id="flip-controls" class="judge-row">
-        <button type="button" id="btn-wrong" class="judge-btn wrong">
+        <button type="button" id="btn-wrong" class="judge-btn wrong" aria-label="まだ">
           <span class="judge-symbol">×</span>
-          <span class="judge-label">まだ</span>
         </button>
-        <button type="button" id="btn-correct" class="judge-btn correct">
+        <button type="button" id="btn-correct" class="judge-btn correct" aria-label="覚えた">
           <span class="judge-symbol">◯</span>
-          <span class="judge-label">覚えた</span>
         </button>
       </div>
 
@@ -391,6 +424,21 @@
         <button type="button" id="btn-input-next" class="solid-action-btn primary hidden" style="width: 100%;">次の問題へ</button>
       </div>
     </footer>
+  </div>
+
+  <!-- ==================== フォルダ移動モーダル ==================== -->
+  <div id="folder-move-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="group-heading" style="font-size: 1rem; color: var(--text); margin-bottom: 2px;">フォルダに移動</div>
+      <div id="move-modal-deck-name" class="muted-small" style="margin-bottom: 12px;"></div>
+      <div id="folder-move-list" class="folder-choice-list"></div>
+      <button type="button" id="btn-move-create-folder" class="outline-full-btn" style="margin-top: 10px;">
+        ＋ 新しいフォルダを作成して移動
+      </button>
+      <div style="margin-top: 10px;">
+        <button type="button" id="btn-move-cancel" class="solid-action-btn" style="width: 100%;">閉じる</button>
+      </div>
+    </div>
   </div>
 
   <!-- ==================== カード編集モーダル ==================== -->

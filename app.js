@@ -1,6 +1,9 @@
 (function () {
   const S = window.StudyStorage;
   let appData = S.loadData();
+  if (!Array.isArray(appData.folders)) {
+    appData.folders = [];
+  }
 
   const settings = {
     mode: 'smart',      // 'smart' | 'all' | 'weak' | 'srs'
@@ -24,6 +27,8 @@
     answeredCurrent: false
   };
 
+  let currentFolderId = null;
+  let movingDeckId = null;
   let pendingImageDataUrl = '';
   let suppressFlipUntil = 0;
   let editingCardId = null;
@@ -40,6 +45,11 @@
 
   function getActiveDeck() {
     return appData.decks.find((d) => d.id === appData.activeDeckId) || appData.decks[0];
+  }
+
+  function getFolderById(folderId) {
+    if (!folderId) return null;
+    return (appData.folders || []).find((f) => f.id === folderId) || null;
   }
 
   function applyThemeAndRedsheet() {
@@ -94,46 +104,201 @@
     reader.readAsText(file, 'UTF-8');
   }
 
-  /* ==================== 第1段階：ホーム画面（単語帳一覧） ==================== */
-  function showHomeView() {
+  /* ==================== 第1段階：ホーム画面（フォルダ・単語帳一覧） ==================== */
+  function showHomeView(folderId = currentFolderId) {
     session.active = false;
+    if (folderId && !getFolderById(folderId)) {
+      currentFolderId = null;
+    } else {
+      currentFolderId = folderId || null;
+    }
+
     $('view-study').classList.add('hidden');
     $('view-deck').classList.add('hidden');
     $('view-home').classList.remove('hidden');
-    renderHomeDeckList();
+    renderHomeView();
   }
 
-  function renderHomeDeckList() {
-    const list = $('home-deck-list');
+  function createDeckCardElement(deck) {
+    const total = deck.cards.length;
+    const mastered = deck.cards.filter((c) => c.correctCount > 0 && c.correctCount >= c.wrongCount).length;
+    const weak = deck.cards.filter((c) => c.wrongCount > c.correctCount || c.pinned).length;
+    const pct = total > 0 ? Math.round((mastered / total) * 100) : 0;
+
+    const cardEl = document.createElement('div');
+    cardEl.className = 'deck-card';
+    cardEl.innerHTML = `
+      <div class="deck-card-top">
+        <div class="deck-card-title">${escapeText(deck.title)}</div>
+        <div class="deck-card-right-tools">
+          <span class="deck-card-count">${total}問</span>
+          <button type="button" class="deck-move-btn" title="フォルダ移動" aria-label="フォルダ移動">📁</button>
+        </div>
+      </div>
+      <div class="progress-slim">
+        <div class="progress-slim-fill" style="width: ${pct}%;"></div>
+      </div>
+      <div class="deck-card-footer">
+        <span>定着率 ${pct}%（${mastered}/${total}）</span>
+        <span>苦手・★ ${weak}問</span>
+      </div>
+    `;
+
+    const moveBtn = cardEl.querySelector('.deck-move-btn');
+    if (moveBtn) {
+      moveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        haptic(10);
+        openFolderMoveModal(deck.id);
+      });
+    }
+
+    cardEl.addEventListener('click', () => {
+      haptic(10);
+      openDeckView(deck.id);
+    });
+
+    return cardEl;
+  }
+
+  function renderHomeView() {
+    const folderList = $('home-folder-list');
+    const deckList = $('home-deck-list');
+    const heroEl = $('home-hero');
+    const folderNav = $('folder-nav-bar');
+    const newFolderBtn = $('btn-new-folder');
+    if (!folderList || !deckList) return;
+
+    folderList.innerHTML = '';
+    deckList.innerHTML = '';
+
+    const activeFolder = getFolderById(currentFolderId);
+
+    if (activeFolder) {
+      // フォルダ内部の表示
+      heroEl?.classList.add('hidden');
+      folderNav?.classList.remove('hidden');
+      folderList.classList.add('hidden');
+      newFolderBtn?.classList.add('hidden');
+      $('current-folder-title').textContent = activeFolder.name;
+
+      const decksInFolder = appData.decks.filter((d) => d.folderId === activeFolder.id);
+      if (decksInFolder.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-folder-box';
+        empty.textContent = 'このフォルダにはまだ単語帳がありません。「新しい単語帳を作成」または他の単語帳の📁ボタンから移動できます。';
+        deckList.appendChild(empty);
+      } else {
+        decksInFolder.forEach((deck) => {
+          deckList.appendChild(createDeckCardElement(deck));
+        });
+      }
+    } else {
+      // トップ一覧の表示
+      heroEl?.classList.remove('hidden');
+      folderNav?.classList.add('hidden');
+      newFolderBtn?.classList.remove('hidden');
+
+      const folders = appData.folders || [];
+      if (folders.length > 0) {
+        folderList.classList.remove('hidden');
+        folders.forEach((folder) => {
+          const childDecks = appData.decks.filter((d) => d.folderId === folder.id);
+          const totalCards = childDecks.reduce((sum, d) => sum + d.cards.length, 0);
+
+          const fEl = document.createElement('div');
+          fEl.className = 'folder-card';
+          fEl.innerHTML = `
+            <div class="folder-card-left">
+              <div class="folder-icon-box">📁</div>
+              <div class="folder-card-info">
+                <div class="folder-card-title">${escapeText(folder.name)}</div>
+                <div class="folder-card-meta">合計 ${totalCards}問</div>
+              </div>
+            </div>
+            <div class="folder-card-right">
+              <span class="folder-deck-badge">${childDecks.length}冊</span>
+              <span class="folder-chevron">›</span>
+            </div>
+          `;
+          fEl.addEventListener('click', () => {
+            haptic(10);
+            showHomeView(folder.id);
+          });
+          folderList.appendChild(fEl);
+        });
+      } else {
+        folderList.classList.add('hidden');
+      }
+
+      const rootDecks = appData.decks.filter((d) => !d.folderId || !getFolderById(d.folderId));
+      rootDecks.forEach((deck) => {
+        deckList.appendChild(createDeckCardElement(deck));
+      });
+    }
+  }
+
+  /* ==================== フォルダ移動モーダル ==================== */
+  function openFolderMoveModal(deckId) {
+    const deck = appData.decks.find((d) => d.id === deckId);
+    if (!deck) return;
+    movingDeckId = deck.id;
+
+    $('move-modal-deck-name').textContent = `対象：「${deck.title}」`;
+    renderFolderMoveChoices(deck);
+    $('folder-move-modal').classList.remove('hidden');
+  }
+
+  function closeFolderMoveModal() {
+    movingDeckId = null;
+    $('folder-move-modal').classList.add('hidden');
+  }
+
+  function renderFolderMoveChoices(deck) {
+    const list = $('folder-move-list');
     if (!list) return;
     list.innerHTML = '';
 
-    appData.decks.forEach((deck) => {
-      const total = deck.cards.length;
-      const mastered = deck.cards.filter((c) => c.correctCount > 0 && c.correctCount >= c.wrongCount).length;
-      const weak = deck.cards.filter((c) => c.wrongCount > c.correctCount || c.pinned).length;
-      const pct = total > 0 ? Math.round((mastered / total) * 100) : 0;
+    const currentFid = deck.folderId && getFolderById(deck.folderId) ? deck.folderId : '';
 
-      const cardEl = document.createElement('div');
-      cardEl.className = 'deck-card';
-      cardEl.innerHTML = `
-        <div class="deck-card-top">
-          <div class="deck-card-title">${escapeText(deck.title)}</div>
-          <span class="deck-card-count">${total}問</span>
-        </div>
-        <div class="progress-slim">
-          <div class="progress-slim-fill" style="width: ${pct}%;"></div>
-        </div>
-        <div class="deck-card-footer">
-          <span>定着率 ${pct}%（${mastered}/${total}）</span>
-          <span>苦手・★ ${weak}問</span>
-        </div>
+    // フォルダなし（トップ一覧）
+    const rootBtn = document.createElement('button');
+    rootBtn.type = 'button';
+    rootBtn.className = 'folder-choice-item' + (currentFid === '' ? ' active' : '');
+    rootBtn.innerHTML = `
+      <span>📂 フォルダなし（トップ一覧）</span>
+      <span>${currentFid === '' ? '✓' : ''}</span>
+    `;
+    rootBtn.addEventListener('click', () => {
+      deck.folderId = '';
+      S.saveData(appData);
+      haptic(12);
+      closeFolderMoveModal();
+      if (!$('view-home').classList.contains('hidden')) {
+        renderHomeView();
+      }
+    });
+    list.appendChild(rootBtn);
+
+    (appData.folders || []).forEach((folder) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      const isSelected = currentFid === folder.id;
+      btn.className = 'folder-choice-item' + (isSelected ? ' active' : '');
+      btn.innerHTML = `
+        <span>📁 ${escapeText(folder.name)}</span>
+        <span>${isSelected ? '✓' : ''}</span>
       `;
-      cardEl.addEventListener('click', () => {
-        haptic(10);
-        openDeckView(deck.id);
+      btn.addEventListener('click', () => {
+        deck.folderId = folder.id;
+        S.saveData(appData);
+        haptic(12);
+        closeFolderMoveModal();
+        if (!$('view-home').classList.contains('hidden')) {
+          renderHomeView();
+        }
       });
-      list.appendChild(cardEl);
+      list.appendChild(btn);
     });
   }
 
@@ -383,6 +548,11 @@
     return list.map((c) => c.id);
   }
 
+  function setStudyBehindVisible(visible) {
+    $('study-main-area')?.classList.toggle('invisible-behind', !visible);
+    $('study-bottom-area')?.classList.toggle('invisible-behind', !visible);
+  }
+
   function startStudySession() {
     const deck = getActiveDeck();
     if (!deck || deck.cards.length === 0) return;
@@ -408,12 +578,15 @@
     $('view-study').classList.remove('hidden');
     $('review-interstitial').classList.add('hidden');
     $('complete-interstitial').classList.add('hidden');
+    setStudyBehindVisible(true);
 
     renderCurrentStudyCard();
   }
 
   function exitStudySession() {
     session.active = false;
+    resetCardTransform(true);
+    setStudyBehindVisible(true);
     $('view-study').classList.add('hidden');
     $('view-deck').classList.remove('hidden');
     refreshDeckHeaderAndFilters();
@@ -452,15 +625,13 @@
     $('progress-fill').style.width = `${Math.min(100, Math.round((cur / total) * 100))}%`;
     $('progress-text').textContent = `${cur} / ${total}`;
     $('study-phase-badge').textContent = isReview
-      ? '復習中'
+      ? ''
       : (session.wrongPool.length > 0 ? `間違い蓄積: ${session.wrongPool.length}/5` : '');
 
-    // 両面のスター状態＆カテゴリタグを同期
     syncPinButtons(card.pinned);
     $('front-cat-tag').textContent = card.category || '一般';
     $('back-cat-tag').textContent = card.category || '一般';
 
-    // 表裏のバッジ＆テキスト切り替え
     const frontBadge = $('front-badge');
     const backBadge = $('back-badge');
     if (settings.reverse) {
@@ -481,7 +652,6 @@
     S.renderContent($('front-content'), frontText);
     S.renderContent($('back-content'), backText);
 
-    // 画像
     const fImg = $('front-image');
     const bImg = $('back-image');
     if (card.image && !settings.reverse) {
@@ -497,7 +667,6 @@
       bImg.classList.add('hidden');
     }
 
-    // ヒント
     const hintBtn = $('btn-hint');
     const hintBox = $('hint-text');
     hintBox.classList.add('hidden');
@@ -508,7 +677,6 @@
       hintBtn.classList.add('hidden');
     }
 
-    // 3Dフリップと座標をリセット
     const flipper = $('card-flipper');
     flipper.style.transition = 'none';
     flipper.classList.remove('is-flipped');
@@ -517,7 +685,6 @@
 
     resetCardTransform(true);
 
-    // 下部UI切替
     $('flip-controls').classList.toggle('hidden', settings.format !== 'flip');
     $('choice-container').classList.toggle('hidden', settings.format !== 'choice');
     $('input-container').classList.toggle('hidden', settings.format !== 'input');
@@ -729,11 +896,15 @@
     session.reviewIndex = 0;
     session.mainStepsSinceReview = 0;
 
+    resetCardTransform(true);
+    setStudyBehindVisible(false);
+
     $('review-count-label').textContent = `間違えた ${session.reviewQueue.length}問 を復習します`;
     $('review-interstitial').classList.remove('hidden');
   }
 
   function showCompleteScreen() {
+    resetCardTransform(true);
     const deck = getActiveDeck();
     $('complete-summary').textContent = `${deck ? deck.title : ''} を完了しました`;
     $('complete-interstitial').classList.remove('hidden');
@@ -762,15 +933,20 @@
 
     $('review-interstitial').classList.add('hidden');
     $('complete-interstitial').classList.add('hidden');
+    setStudyBehindVisible(true);
     renderCurrentStudyCard();
   }
 
-  /* ==================== カードスワイプ制御 ==================== */
+  /* ==================== カードスワイプ＆横面ハイライト制御 ==================== */
   function resetCardTransform(instant = false) {
     const cardEl = $('card-stage');
     const leftBadge = $('swipe-badge-left');
     const rightBadge = $('swipe-badge-right');
+    const leftEdge = $('swipe-edge-left');
+    const rightEdge = $('swipe-edge-right');
     if (!cardEl) return;
+
+    cardEl.classList.remove('swiping-left', 'swiping-right');
 
     if (instant) {
       cardEl.classList.remove('spring-back');
@@ -782,8 +958,23 @@
       cardEl.classList.add('spring-back');
       cardEl.style.transform = 'translate3d(0, 0, 0) rotate(0deg)';
     }
-    if (leftBadge) leftBadge.style.opacity = '0';
-    if (rightBadge) rightBadge.style.opacity = '0';
+
+    if (leftBadge) {
+      leftBadge.style.opacity = '0';
+      leftBadge.classList.remove('is-ready');
+    }
+    if (rightBadge) {
+      rightBadge.style.opacity = '0';
+      rightBadge.classList.remove('is-ready');
+    }
+    if (leftEdge) {
+      leftEdge.style.opacity = '0';
+      leftEdge.classList.remove('is-ready');
+    }
+    if (rightEdge) {
+      rightEdge.style.opacity = '0';
+      rightEdge.classList.remove('is-ready');
+    }
   }
 
   function initCardSwipeAndFlip() {
@@ -827,7 +1018,7 @@
           resetCardTransform(false);
           return;
         }
-        if (Math.abs(dx) > 16 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+        if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.2) {
           lockedHorizontal = true;
         } else {
           return;
@@ -837,19 +1028,42 @@
       if (lockedHorizontal) {
         e.preventDefault();
         currentX = dx;
-        const threshold = Math.max(105, cardEl.clientWidth * 0.30);
+        const threshold = Math.max(100, cardEl.clientWidth * 0.28);
         const ratio = Math.min(1, Math.abs(dx) / threshold);
+        const isReady = ratio >= 1;
 
-        if (ratio >= 1 && !thresholdPassed) {
+        if (isReady && !thresholdPassed) {
           thresholdPassed = true;
           haptic(15);
-        } else if (ratio < 1) {
+        } else if (!isReady) {
           thresholdPassed = false;
         }
 
         cardEl.style.transform = `translate3d(${dx}px, ${Math.abs(dx) * 0.04}px, 0) rotate(${dx * 0.035}deg)`;
-        $('swipe-badge-right').style.opacity = dx > 0 ? String(ratio) : '0';
-        $('swipe-badge-left').style.opacity = dx < 0 ? String(ratio) : '0';
+        cardEl.classList.toggle('swiping-right', dx > 12);
+        cardEl.classList.toggle('swiping-left', dx < -12);
+
+        const rightBadge = $('swipe-badge-right');
+        const leftBadge = $('swipe-badge-left');
+        const rightEdge = $('swipe-edge-right');
+        const leftEdge = $('swipe-edge-left');
+
+        if (rightBadge) {
+          rightBadge.style.opacity = dx > 0 ? String(ratio) : '0';
+          rightBadge.classList.toggle('is-ready', dx > 0 && isReady);
+        }
+        if (leftBadge) {
+          leftBadge.style.opacity = dx < 0 ? String(ratio) : '0';
+          leftBadge.classList.toggle('is-ready', dx < 0 && isReady);
+        }
+        if (rightEdge) {
+          rightEdge.style.opacity = dx > 0 ? String(Math.min(1, ratio * 1.15)) : '0';
+          rightEdge.classList.toggle('is-ready', dx > 0 && isReady);
+        }
+        if (leftEdge) {
+          leftEdge.style.opacity = dx < 0 ? String(Math.min(1, ratio * 1.15)) : '0';
+          leftEdge.classList.toggle('is-ready', dx < 0 && isReady);
+        }
       }
     }, { passive: false });
 
@@ -859,7 +1073,7 @@
 
       if (lockedHorizontal && !aborted) {
         suppressFlipUntil = Date.now() + 350;
-        const threshold = Math.max(105, cardEl.clientWidth * 0.30);
+        const threshold = Math.max(100, cardEl.clientWidth * 0.28);
 
         if (settings.format === 'flip' && Math.abs(currentX) >= threshold) {
           const isRight = currentX > 0;
@@ -889,25 +1103,45 @@
     });
   }
 
-  /* ==================== CSV読み込み共通処理 ==================== */
+  /* ==================== CSV読み込み共通処理（フォルダ復元対応） ==================== */
   function handleCsvFileUpload(file, contextMode) {
     readCsvFileWithEncoding(file, (text) => {
       const result = S.parseCsvAuto(text);
       if (result.type === 'backup' && result.decks.length > 0) {
         const totalCards = result.decks.reduce((s, d) => s + d.cards.length, 0);
+        const folderCount = (result.folders || []).length;
+        const folderNote = folderCount > 0 ? `・${folderCount}個のフォルダ` : '';
         const replace = confirm(
-          `全データバックアップCSV（${result.decks.length}個の単語帳 / 計${totalCards}問）を検出しました。\n` +
+          `全データバックアップCSV（${result.decks.length}個の単語帳${folderNote} / 計${totalCards}問）を検出しました。\n` +
           `「OK」＝ 現在のデータに追加して取り込む\n` +
           `「キャンセル」＝ 取り込みを中止`
         );
         if (!replace) return;
-        appData.decks.push(...result.decks);
+
+        // フォルダの統合・IDマッピング
+        const importedFolderIdMap = new Map();
+        (result.folders || []).forEach((impFolder) => {
+          const existing = (appData.folders || []).find((f) => f.name === impFolder.name);
+          if (existing) {
+            importedFolderIdMap.set(impFolder.id, existing.id);
+          } else {
+            const newF = { id: S.uid('folder'), name: impFolder.name };
+            appData.folders.push(newF);
+            importedFolderIdMap.set(impFolder.id, newF.id);
+          }
+        });
+
+        result.decks.forEach((d) => {
+          d.folderId = d.folderId ? (importedFolderIdMap.get(d.folderId) || '') : '';
+          appData.decks.push(d);
+        });
+
         if (result.examDate && !appData.examDate) {
           appData.examDate = result.examDate;
         }
         S.saveData(appData);
         if (contextMode === 'home') {
-          renderHomeDeckList();
+          renderHomeView();
         } else {
           refreshDeckHeaderAndFilters();
           renderManageTab();
@@ -919,7 +1153,7 @@
         deck.cards.push(...result.cards);
         S.saveData(appData);
         if (contextMode === 'home') {
-          renderHomeDeckList();
+          renderHomeView();
         } else {
           refreshDeckHeaderAndFilters();
           renderManageTab();
@@ -940,15 +1174,81 @@
       applyThemeAndRedsheet();
     });
 
-    // ホーム画面：新規デッキ作成
+    // ホーム画面：新規単語帳作成（フォルダ内なら自動でそのフォルダに作成）
     $('btn-new-deck')?.addEventListener('click', () => {
       const title = prompt('新しい単語帳の名前を入力:');
       if (!title || !title.trim()) return;
-      const newDeck = { id: S.uid('deck'), title: title.trim(), cards: [] };
+      const newDeck = {
+        id: S.uid('deck'),
+        folderId: currentFolderId || '',
+        title: title.trim(),
+        cards: []
+      };
       appData.decks.push(newDeck);
       S.saveData(appData);
       openDeckView(newDeck.id);
       switchTab('manage');
+    });
+
+    // ホーム画面：新規フォルダ作成
+    $('btn-new-folder')?.addEventListener('click', () => {
+      const name = prompt('新しいフォルダの名前を入力（例：英語、日本史、定期テスト）:');
+      if (!name || !name.trim()) return;
+      const newFolder = { id: S.uid('folder'), name: name.trim() };
+      appData.folders.push(newFolder);
+      S.saveData(appData);
+      haptic(12);
+      showHomeView(newFolder.id);
+    });
+
+    // フォルダ内ナビゲーション：戻る・名前変更・削除
+    $('btn-folder-back')?.addEventListener('click', () => {
+      haptic(10);
+      showHomeView(null);
+    });
+
+    $('btn-rename-folder')?.addEventListener('click', () => {
+      const folder = getFolderById(currentFolderId);
+      if (!folder) return;
+      const next = prompt('フォルダ名を変更:', folder.name);
+      if (!next || !next.trim()) return;
+      folder.name = next.trim();
+      S.saveData(appData);
+      renderHomeView();
+    });
+
+    $('btn-delete-folder')?.addEventListener('click', () => {
+      const folder = getFolderById(currentFolderId);
+      if (!folder) return;
+      if (!confirm(`フォルダ「${folder.name}」を削除しますか？\n※中の単語帳は削除されず、トップ一覧に戻ります。`)) return;
+      appData.decks.forEach((d) => {
+        if (d.folderId === folder.id) d.folderId = '';
+      });
+      appData.folders = appData.folders.filter((f) => f.id !== folder.id);
+      S.saveData(appData);
+      showHomeView(null);
+    });
+
+    // フォルダ移動モーダル内ボタン
+    $('btn-move-create-folder')?.addEventListener('click', () => {
+      const deck = appData.decks.find((d) => d.id === movingDeckId);
+      if (!deck) return;
+      const name = prompt('新しいフォルダの名前を入力:');
+      if (!name || !name.trim()) return;
+      const newFolder = { id: S.uid('folder'), name: name.trim() };
+      appData.folders.push(newFolder);
+      deck.folderId = newFolder.id;
+      S.saveData(appData);
+      haptic(12);
+      closeFolderMoveModal();
+      if (!$('view-home').classList.contains('hidden')) {
+        renderHomeView();
+      }
+    });
+
+    $('btn-move-cancel')?.addEventListener('click', closeFolderMoveModal);
+    $('folder-move-modal')?.addEventListener('click', (e) => {
+      if (e.target === $('folder-move-modal')) closeFolderMoveModal();
     });
 
     // ホーム画面：全データCSVバックアップ＆復元
@@ -965,8 +1265,18 @@
       e.target.value = '';
     });
 
-    // デッキ詳細画面：戻る・リネーム・削除
-    $('btn-back-home')?.addEventListener('click', showHomeView);
+    // デッキ詳細画面：戻る・フォルダ移動・リネーム・削除
+    $('btn-back-home')?.addEventListener('click', () => {
+      const deck = getActiveDeck();
+      const targetFolderId = deck && deck.folderId && getFolderById(deck.folderId) ? deck.folderId : null;
+      showHomeView(targetFolderId);
+    });
+
+    $('btn-move-deck-folder')?.addEventListener('click', () => {
+      const deck = getActiveDeck();
+      if (!deck) return;
+      openFolderMoveModal(deck.id);
+    });
 
     $('btn-rename-deck')?.addEventListener('click', () => {
       const deck = getActiveDeck();
@@ -985,10 +1295,11 @@
       }
       const deck = getActiveDeck();
       if (!confirm(`「${deck.title}」を削除しますか？`)) return;
+      const prevFolderId = deck.folderId && getFolderById(deck.folderId) ? deck.folderId : null;
       appData.decks = appData.decks.filter((d) => d.id !== deck.id);
       appData.activeDeckId = appData.decks[0].id;
       S.saveData(appData);
-      showHomeView();
+      showHomeView(prevFolderId);
     });
 
     // タブ切替
@@ -1066,6 +1377,7 @@
     $('btn-exit-study')?.addEventListener('click', exitStudySession);
     $('btn-study-redsheet')?.addEventListener('click', () => {
       settings.redsheet = !settings.redsheet;
+      haptic(10);
       applyThemeAndRedsheet();
     });
     $('btn-undo')?.addEventListener('click', performSilentUndo);
@@ -1099,6 +1411,7 @@
 
     $('btn-start-review')?.addEventListener('click', () => {
       $('review-interstitial').classList.add('hidden');
+      setStudyBehindVisible(true);
       renderCurrentStudyCard();
     });
 
@@ -1265,7 +1578,7 @@
       applyThemeAndRedsheet();
       bindEvents();
       initCardSwipeAndFlip();
-      showHomeView();
+      showHomeView(null);
     } catch (err) {
       console.error('Init error:', err);
     }

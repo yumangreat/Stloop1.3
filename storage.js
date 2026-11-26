@@ -13,16 +13,18 @@
       activeDeckId: deckId,
       examDate: '',
       theme: 'light',
+      folders: [],
       decks: [
         {
           id: deckId,
+          folderId: '',
           title: 'サンプル（数式・赤シート確認）',
           cards: [
             {
               id: uid('c'),
               category: '数学',
-              front: '二次方程式 $ax^2 + bx + c = 0$ ($a \\neq 0$) の解の公式',
-              back: '【$$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$】',
+              front: '二次方程式 $ax^2 + bx + c = 0$ ($a \neq 0$) の解の公式',
+              back: '【$$x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$$】',
               hint: '判別式 $D = b^2 - 4ac$ をルートの中に入れます。',
               image: '',
               correctCount: 0,
@@ -35,7 +37,7 @@
               id: uid('c'),
               category: '物理',
               front: '真空中のクーロンの法則の比例定数 $k$ を含む静電気力 $F$ の式',
-              back: '【$$F = k\\frac{|q_1 q_2|}{r^2}$$】',
+              back: '【$$F = k\frac{|q_1 q_2|}{r^2}$$】',
               hint: '距離 $r$ の2乗に反比例します。',
               image: '',
               correctCount: 0,
@@ -79,6 +81,29 @@
     };
   }
 
+  function normalizeStructure(parsed) {
+    const folders = Array.isArray(parsed.folders)
+      ? parsed.folders
+          .filter((f) => f && (f.id || f.name))
+          .map((f) => ({
+            id: f.id || uid('folder'),
+            name: String(f.name || 'フォルダ').trim()
+          }))
+      : [];
+    const folderIds = new Set(folders.map((f) => f.id));
+
+    const decks = Array.isArray(parsed.decks)
+      ? parsed.decks.map((d) => ({
+          id: d.id || uid('deck'),
+          folderId: d.folderId && folderIds.has(d.folderId) ? d.folderId : '',
+          title: String(d.title || d.name || '無題の単語帳'),
+          cards: Array.isArray(d.cards) ? d.cards.map(normalizeCard) : []
+        }))
+      : [];
+
+    return { folders, decks };
+  }
+
   function migrateLegacyData() {
     const candidateKeys = [...LEGACY_KEYS];
     for (let i = 0; i < localStorage.length; i++) {
@@ -93,17 +118,17 @@
         if (!raw) continue;
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.decks) && parsed.decks.length > 0) {
-          const decks = parsed.decks.map((d) => ({
-            id: d.id || uid('deck'),
-            title: String(d.title || d.name || '引き継ぎデッキ'),
-            cards: Array.isArray(d.cards) ? d.cards.map(normalizeCard).filter((c) => c.front && c.back) : []
-          }));
+          const { folders, decks } = normalizeStructure(parsed);
+          decks.forEach((d) => {
+            d.cards = d.cards.filter((c) => c.front && c.back);
+          });
           return {
             activeDeckId: parsed.activeDeckId && decks.some((d) => d.id === parsed.activeDeckId)
               ? parsed.activeDeckId
               : decks[0].id,
             examDate: parsed.examDate || '',
             theme: parsed.theme || 'light',
+            folders,
             decks
           };
         }
@@ -120,9 +145,9 @@
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.decks) && parsed.decks.length > 0) {
-          parsed.decks.forEach((d) => {
-            d.cards = Array.isArray(d.cards) ? d.cards.map(normalizeCard) : [];
-          });
+          const { folders, decks } = normalizeStructure(parsed);
+          parsed.folders = folders;
+          parsed.decks = decks;
           if (!parsed.decks.some((d) => d.id === parsed.activeDeckId)) {
             parsed.activeDeckId = parsed.decks[0].id;
           }
@@ -298,28 +323,31 @@
       ['カテゴリ', '問題(Q)', '答え(A)', 'ヒント'],
       ['英文法', 'apple の意味は？', '【りんご】', '赤い果物'],
       ['日本史', '1192年に鎌倉幕府を開いた人物は？', '【源頼朝】', '平氏を滅ぼした'],
-      ['数学', '二次方程式 $ax^2+bx+c=0$ の解の公式', '【$$x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$$】', '判別式Dを使う']
+      ['数学', '二次方程式 $ax^2+bx+c=0$ の解の公式', '【$$x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$$】', '判別式Dを使う']
     ];
     return '\uFEFF' + rows.map((r) => r.map(escapeCsvCell).join(',')).join('\r\n');
   }
 
-  // 3. 全データ一括バックアップCSV（単語帳名＋学習成績まで完全保存）
+  // 3. 全データ一括バックアップCSV（フォルダ名＋単語帳名＋学習成績まで完全保存）
   function generateFullBackupCsvText(appData) {
+    const folderNameById = new Map((appData.folders || []).map((f) => [f.id, f.name]));
     const header = [
-      '単語帳名', 'カテゴリ', '問題(Q)', '答え(A)', 'ヒント',
+      'フォルダ名', '単語帳名', 'カテゴリ', '問題(Q)', '答え(A)', 'ヒント',
       '正解数', '誤答数', 'ピン留め', 'SRSレベル', '次回学習日時', '目標試験日'
     ].map(escapeCsvCell).join(',');
 
     const lines = [];
     appData.decks.forEach((deck) => {
+      const folderName = deck.folderId ? (folderNameById.get(deck.folderId) || '') : '';
       if (deck.cards.length === 0) {
         lines.push([
-          deck.title, '一般', '', '', '',
+          folderName, deck.title, '一般', '', '', '',
           0, 0, 0, 0, 0, appData.examDate || ''
         ].map(escapeCsvCell).join(','));
       } else {
         deck.cards.forEach((c) => {
           lines.push([
+            folderName,
             deck.title,
             c.category,
             c.front,
@@ -339,15 +367,71 @@
     return '\uFEFF' + [header, ...lines].join('\r\n');
   }
 
-  // 4. CSV自動判別インポート（全バックアップCSV / 4列CSV / 2列CSV すべてに対応）
+  // 4. CSV自動判別インポート（フォルダ付きバックアップCSV / 旧バックアップCSV / 4列CSV / 2列CSV すべてに対応）
   function parseCsvAuto(csvText) {
     const rows = parseCsvRows(csvText);
-    if (rows.length === 0) return { type: 'empty', cards: [], decks: [] };
+    if (rows.length === 0) return { type: 'empty', cards: [], decks: [], folders: [] };
 
     const firstRow = rows[0].map((c) => c.trim());
     const firstJoined = firstRow.join(',').toLowerCase();
 
-    // 全データ一括バックアップCSVの判定（「単語帳名」または9列以上）
+    // フォルダ対応バックアップCSV（先頭列が「フォルダ名」または12列以上）
+    if (firstRow[0] === 'フォルダ名' || firstRow.length >= 12) {
+      const dataRows = firstRow[0] === 'フォルダ名' ? rows.slice(1) : rows;
+      const folderMap = new Map();
+      const deckMap = new Map();
+      let restoredExamDate = '';
+
+      for (const cols of dataRows) {
+        const folderName = (cols[0] || '').trim();
+        let folderId = '';
+        if (folderName) {
+          if (!folderMap.has(folderName)) {
+            folderMap.set(folderName, { id: uid('folder'), name: folderName });
+          }
+          folderId = folderMap.get(folderName).id;
+        }
+
+        const deckTitle = (cols[1] || '復元された単語帳').trim();
+        const deckKey = `${folderId}::${deckTitle}`;
+        if (!deckMap.has(deckKey)) {
+          deckMap.set(deckKey, {
+            id: uid('deck'),
+            folderId,
+            title: deckTitle,
+            cards: []
+          });
+        }
+
+        const front = (cols[3] || '').trim();
+        const back = (cols[4] || '').trim();
+        if (cols[11] && cols[11].trim()) {
+          restoredExamDate = cols[11].trim();
+        }
+        if (front && back) {
+          deckMap.get(deckKey).cards.push(normalizeCard({
+            category: cols[2] || '一般',
+            front,
+            back,
+            hint: cols[5] || '',
+            correctCount: Number(cols[6] || 0),
+            wrongCount: Number(cols[7] || 0),
+            pinned: cols[8] === '1' || String(cols[8]).toLowerCase() === 'true',
+            srsLevel: Number(cols[9] || 0),
+            nextReview: Number(cols[10] || 0)
+          }));
+        }
+      }
+
+      return {
+        type: 'backup',
+        folders: Array.from(folderMap.values()),
+        decks: Array.from(deckMap.values()),
+        examDate: restoredExamDate
+      };
+    }
+
+    // 旧・全データ一括バックアップCSVの判定（「単語帳名」または9〜11列）
     if (firstRow[0] === '単語帳名' || firstRow.length >= 9) {
       const dataRows = firstRow[0] === '単語帳名' ? rows.slice(1) : rows;
       const deckMap = new Map();
@@ -358,6 +442,7 @@
         if (!deckMap.has(deckTitle)) {
           deckMap.set(deckTitle, {
             id: uid('deck'),
+            folderId: '',
             title: deckTitle,
             cards: []
           });
@@ -384,6 +469,7 @@
 
       return {
         type: 'backup',
+        folders: [],
         decks: Array.from(deckMap.values()),
         examDate: restoredExamDate
       };
