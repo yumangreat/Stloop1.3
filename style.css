@@ -1252,10 +1252,37 @@ body.dark .mode-icon.amber { background: #78350f; }
   background: var(--surface-muted);
   padding: 3px 10px;
   border-radius: 999px;
-  max-width: 60%;
+  max-width: 52%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.speak-btn {
+  border: none;
+  background: transparent;
+  font-size: 1.32rem;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.14s ease, background-color 0.15s ease;
+}
+
+.speak-btn:active {
+  transform: scale(0.9);
+}
+
+.speak-btn.is-speaking {
+  background: var(--brand-soft);
+  transform: scale(1.08);
 }
 
 .pin-btn {

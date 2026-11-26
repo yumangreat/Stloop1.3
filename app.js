@@ -34,6 +34,7 @@
   let pendingImageDataUrl = '';
   let suppressFlipUntil = 0;
   let editingCardId = null;
+  let activeSpeakSide = null;
 
   const $ = (id) => document.getElementById(id);
 
@@ -72,6 +73,105 @@
     if (studyBtn) {
       studyBtn.classList.toggle('active', settings.redsheet);
     }
+  }
+
+  function syncSpeakButtons() {
+    const fBtn = $('btn-speak-front');
+    const bBtn = $('btn-speak-back');
+    if (fBtn) fBtn.classList.toggle('is-speaking', activeSpeakSide === 'front');
+    if (bBtn) bBtn.classList.toggle('is-speaking', activeSpeakSide === 'back');
+  }
+
+  function stopSpeech() {
+    activeSpeakSide = null;
+    syncSpeakButtons();
+    if ('speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch (_) {}
+    }
+  }
+
+  function buildSpeechText(rawText) {
+    let t = String(rawText || '');
+    t = t.replace(/【|】/g, '');
+    t = t.replace(/\$\$([\s\S]*?)\$\$/g, '$1');
+    t = t.replace(/\$([^$]+?)\$/g, '$1');
+    t = t.replace(/\\frac\{([^{}]+)\}\{([^{}]+)\}/g, '$1 / $2');
+    t = t.replace(/\\sqrt\{([^{}]+)\}/g, 'ルート $1');
+    t = t
+      .replace(/\\pm/g, '±')
+      .replace(/\\times/g, '×')
+      .replace(/\\div/g, '÷')
+      .replace(/\\neq/g, '≠')
+      .replace(/\\leq/g, '≤')
+      .replace(/\\geq/g, '≥')
+      .replace(/\\pi/g, 'π')
+      .replace(/\\[a-zA-Z]+/g, ' ')
+      .replace(/[{}]/g, ' ');
+    return t.replace(/\s+/g, ' ').trim();
+  }
+
+  function detectSpeechLang(text) {
+    if (/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(text)) {
+      return 'ja-JP';
+    }
+    if (/[A-Za-z]/.test(text)) {
+      return 'en-US';
+    }
+    return 'ja-JP';
+  }
+
+  function speakCardSide(side) {
+    if (!('speechSynthesis' in window) || typeof SpeechSynthesisUtterance !== 'function') {
+      alert('お使いのブラウザは音声読み上げに対応していません。');
+      return;
+    }
+
+    const wasSameSide = activeSpeakSide === side && window.speechSynthesis.speaking;
+    stopSpeech();
+    if (wasSameSide) return;
+
+    const card = getCurrentCard();
+    if (!card) return;
+
+    const rawText = side === 'front'
+      ? (settings.reverse ? card.back : card.front)
+      : (settings.reverse ? card.front : card.back);
+    const cleanText = buildSpeechText(rawText);
+    if (!cleanText) return;
+
+    const lang = detectSpeechLang(cleanText);
+    const utter = new SpeechSynthesisUtterance(cleanText);
+    utter.lang = lang;
+    utter.rate = 1.0;
+
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      const matchedVoice = voices.find((v) => v.lang && v.lang.toLowerCase() === lang.toLowerCase())
+        || voices.find((v) => v.lang && v.lang.toLowerCase().startsWith(lang.slice(0, 2).toLowerCase()));
+      if (matchedVoice) {
+        utter.voice = matchedVoice;
+      }
+    } catch (_) {}
+
+    activeSpeakSide = side;
+    syncSpeakButtons();
+
+    utter.onend = () => {
+      if (activeSpeakSide === side) {
+        activeSpeakSide = null;
+        syncSpeakButtons();
+      }
+    };
+    utter.onerror = () => {
+      if (activeSpeakSide === side) {
+        activeSpeakSide = null;
+        syncSpeakButtons();
+      }
+    };
+
+    window.speechSynthesis.speak(utter);
   }
 
   function escapeText(str) {
@@ -595,6 +695,7 @@
   }
 
   function exitStudySession() {
+    stopSpeech();
     session.active = false;
     session.animatingJudge = false;
     document.body.classList.remove('input-cloze-hide');
@@ -623,6 +724,7 @@
   }
 
   function renderCurrentStudyCard() {
+    stopSpeech();
     const card = getCurrentCard();
     if (!card) {
       showCompleteScreen();
@@ -712,6 +814,7 @@
 
   function flipCard(forceState) {
     if (settings.format !== 'flip' && settings.format !== 'input') return;
+    stopSpeech();
     session.isFlipped = typeof forceState === 'boolean' ? forceState : !session.isFlipped;
     $('card-flipper').classList.toggle('is-flipped', session.isFlipped);
     haptic(12);
@@ -1227,6 +1330,7 @@
 
   function performSilentUndo() {
     if (!session.active) return;
+    stopSpeech();
     const snap = S.popUndo();
     if (!snap) return;
 
@@ -1774,6 +1878,19 @@
     });
     $('btn-undo')?.addEventListener('click', performSilentUndo);
 
+    // 表面・裏面両方の読み上げボタン
+    $('btn-speak-front')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      haptic(10);
+      speakCardSide('front');
+    });
+
+    $('btn-speak-back')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      haptic(10);
+      speakCardSide('back');
+    });
+
     // 表面・裏面両方のピン留めボタン
     [$('btn-pin-front'), $('btn-pin-back')].forEach((btn) => {
       btn?.addEventListener('click', (e) => {
@@ -1970,6 +2087,12 @@
   /* ==================== 初期化 ==================== */
   document.addEventListener('DOMContentLoaded', () => {
     try {
+      if ('speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.getVoices();
+          window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+        } catch (_) {}
+      }
       applyThemeAndRedsheet();
       bindEvents();
       initCardSwipeAndFlip();
