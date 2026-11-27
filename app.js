@@ -455,14 +455,195 @@
     return list;
   }
 
+  function getSessionStorageKey(deckId, format) {
+    return `${deckId}::${format || 'flip'}`;
+  }
+
+  function hasMeaningfulProgress(saved) {
+    if (!saved) return false;
+    return (
+      saved.mainIndex > 0 ||
+      saved.reviewIndex > 0 ||
+      (Array.isArray(saved.wrongPool) && saved.wrongPool.length > 0) ||
+      Boolean(saved.isFlipped)
+    );
+  }
+
+  function getValidSavedSession(deckId, format) {
+    if (!deckId || !format) return null;
+    if (!appData.savedSessions || typeof appData.savedSessions !== 'object') {
+      appData.savedSessions = {};
+    }
+    const key = getSessionStorageKey(deckId, format);
+    const raw = appData.savedSessions[key];
+    if (!raw || typeof raw !== 'object') return null;
+
+    const deck = appData.decks.find((d) => d.id === deckId);
+    if (!deck || !Array.isArray(deck.cards) || deck.cards.length === 0) {
+      delete appData.savedSessions[key];
+      return null;
+    }
+
+    const validIds = new Set(deck.cards.map((c) => c.id));
+    const mainQueue = Array.isArray(raw.mainQueue)
+      ? raw.mainQueue.filter((id) => validIds.has(id))
+      : [];
+    const wrongPool = Array.isArray(raw.wrongPool)
+      ? raw.wrongPool.filter((id) => validIds.has(id))
+      : [];
+    let reviewQueue = Array.isArray(raw.reviewQueue)
+      ? raw.reviewQueue.filter((id) => validIds.has(id))
+      : [];
+
+    if (mainQueue.length === 0) {
+      delete appData.savedSessions[key];
+      return null;
+    }
+
+    let phase = raw.phase === 'review' ? 'review' : 'main';
+    let mainIndex = Math.max(0, Math.min(Number(raw.mainIndex || 0), mainQueue.length));
+    let reviewIndex = Math.max(0, Math.min(Number(raw.reviewIndex || 0), reviewQueue.length));
+    const mainStepsSinceReview = Math.max(0, Number(raw.mainStepsSinceReview || 0));
+
+    if (phase === 'review' && reviewIndex >= reviewQueue.length) {
+      phase = 'main';
+      reviewQueue = [];
+      reviewIndex = 0;
+    }
+
+    if (phase === 'main' && mainIndex >= mainQueue.length && wrongPool.length === 0) {
+      delete appData.savedSessions[key];
+      return null;
+    }
+
+    return {
+      deckId,
+      format,
+      mode: ['smart', 'all', 'weak', 'srs'].includes(raw.mode) ? raw.mode : 'smart',
+      category: typeof raw.category === 'string' ? raw.category : 'ALL',
+      reverse: Boolean(raw.reverse),
+      shuffle: Boolean(raw.shuffle),
+      phase,
+      mainQueue,
+      mainIndex,
+      mainStepsSinceReview,
+      wrongPool,
+      reviewQueue,
+      reviewIndex,
+      isFlipped: Boolean(raw.isFlipped),
+      updatedAt: Number(raw.updatedAt || Date.now())
+    };
+  }
+
+  function clearSavedSession(deckId, format) {
+    if (!appData.savedSessions || typeof appData.savedSessions !== 'object') return;
+    delete appData.savedSessions[getSessionStorageKey(deckId, format)];
+  }
+
+  function clearAllSavedSessionsForDeck(deckId) {
+    if (!appData.savedSessions || typeof appData.savedSessions !== 'object') return;
+    const prefix = `${deckId}::`;
+    Object.keys(appData.savedSessions).forEach((k) => {
+      if (k.startsWith(prefix)) {
+        delete appData.savedSessions[k];
+      }
+    });
+    if (appData.activeStudy && appData.activeStudy.deckId === deckId) {
+      appData.activeStudy = null;
+    }
+  }
+
+  function persistCurrentSession(keepActiveStudy = true) {
+    if (!session.active) return;
+    const deck = getActiveDeck();
+    if (!deck) return;
+
+    if (!appData.savedSessions || typeof appData.savedSessions !== 'object') {
+      appData.savedSessions = {};
+    }
+
+    const key = getSessionStorageKey(deck.id, settings.format);
+    appData.savedSessions[key] = {
+      deckId: deck.id,
+      format: settings.format,
+      mode: settings.mode,
+      category: settings.category,
+      reverse: settings.reverse,
+      shuffle: settings.shuffle,
+      phase: session.phase,
+      mainQueue: [...session.mainQueue],
+      mainIndex: session.mainIndex,
+      mainStepsSinceReview: session.mainStepsSinceReview,
+      wrongPool: [...session.wrongPool],
+      reviewQueue: [...session.reviewQueue],
+      reviewIndex: session.reviewIndex,
+      isFlipped: Boolean(session.isFlipped),
+      updatedAt: Date.now()
+    };
+
+    if (keepActiveStudy) {
+      appData.activeStudy = {
+        deckId: deck.id,
+        format: settings.format
+      };
+    }
+
+    S.saveData(appData);
+  }
+
+  function syncSettingsControlsFromState() {
+    document.querySelectorAll('.mode-row').forEach((b) => {
+      b.classList.toggle('active', b.dataset.mode === settings.mode);
+    });
+    document.querySelectorAll('.fmt-seg-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.format === settings.format);
+    });
+    const revEl = $('opt-reverse');
+    if (revEl) revEl.checked = settings.reverse;
+    const shufEl = $('opt-shuffle');
+    if (shufEl) shufEl.checked = settings.shuffle;
+  }
+
   function updateStartTargetCount() {
     const deck = getActiveDeck();
     const countSpan = $('start-target-count');
+    const mainLabel = $('start-btn-main');
+    const badgeEl = $('start-btn-badge');
     const startBtn = $('btn-start-study');
+    const restartFreshBtn = $('btn-restart-fresh');
     if (!deck || !countSpan || !startBtn) return;
 
+    const saved = getValidSavedSession(deck.id, settings.format);
+    if (saved && hasMeaningfulProgress(saved)) {
+      const isRev = saved.phase === 'review' && saved.reviewQueue.length > 0;
+      const cur = isRev
+        ? Math.min(saved.reviewIndex + 1, saved.reviewQueue.length)
+        : Math.min(saved.mainIndex + 1, saved.mainQueue.length);
+      const total = isRev ? saved.reviewQueue.length : saved.mainQueue.length;
+
+      if (mainLabel) mainLabel.textContent = '続きから再開';
+      if (badgeEl) {
+        badgeEl.innerHTML = isRev
+          ? `復習 <span id="start-target-count">${cur} / ${total}</span> 問目`
+          : `<span id="start-target-count">${cur} / ${total}</span> 問目`;
+      }
+      startBtn.classList.add('is-resume');
+      startBtn.disabled = false;
+      startBtn.style.opacity = '1';
+      restartFreshBtn?.classList.remove('hidden');
+      return;
+    }
+
+    if (mainLabel) mainLabel.textContent = '学習をスタート';
+    if (badgeEl) {
+      badgeEl.innerHTML = `<span id="start-target-count">0</span> 問`;
+    }
+    startBtn.classList.remove('is-resume');
+    restartFreshBtn?.classList.add('hidden');
+
     const targets = getFilteredCards(deck);
-    countSpan.textContent = String(targets.length);
+    const freshCountSpan = $('start-target-count');
+    if (freshCountSpan) freshCountSpan.textContent = String(targets.length);
     startBtn.disabled = targets.length === 0;
     startBtn.style.opacity = targets.length === 0 ? '0.45' : '1';
   }
@@ -662,9 +843,61 @@
     $('study-bottom-area')?.classList.toggle('invisible-behind', !visible);
   }
 
-  function startStudySession() {
+  function restoreStudyFromSaved(saved, silent = false) {
+    const deck = getActiveDeck();
+    if (!deck || !saved) return false;
+
+    settings.format = saved.format;
+    settings.mode = saved.mode;
+    settings.category = saved.category;
+    settings.reverse = saved.reverse;
+    settings.shuffle = saved.shuffle;
+    syncSettingsControlsFromState();
+
+    if (!silent) haptic(18);
+    S.clearUndo();
+    session.active = true;
+    session.phase = saved.phase;
+    session.mainQueue = [...saved.mainQueue];
+    session.mainIndex = saved.mainIndex;
+    session.mainStepsSinceReview = saved.mainStepsSinceReview;
+    session.wrongPool = [...saved.wrongPool];
+    session.reviewQueue = [...saved.reviewQueue];
+    session.reviewIndex = saved.reviewIndex;
+    session.isFlipped = false;
+    session.answeredCurrent = false;
+    session.awaitingSelfJudge = false;
+    session.animatingJudge = false;
+
+    $('view-home').classList.add('hidden');
+    $('view-deck').classList.add('hidden');
+    $('view-study').classList.remove('hidden');
+    $('review-interstitial').classList.add('hidden');
+    $('complete-interstitial').classList.add('hidden');
+    setStudyBehindVisible(true);
+
+    if (session.phase === 'main' && session.mainIndex >= session.mainQueue.length && session.wrongPool.length > 0) {
+      enterReviewMode();
+      return true;
+    }
+
+    renderCurrentStudyCard(saved.isFlipped);
+    return true;
+  }
+
+  function startStudySession(forceFresh = false) {
     const deck = getActiveDeck();
     if (!deck || deck.cards.length === 0) return;
+
+    if (!forceFresh) {
+      const saved = getValidSavedSession(deck.id, settings.format);
+      if (saved && hasMeaningfulProgress(saved)) {
+        restoreStudyFromSaved(saved, false);
+        return;
+      }
+    }
+
+    clearSavedSession(deck.id, settings.format);
 
     const queue = buildQueueForMode(deck);
     if (queue.length === 0) return;
@@ -691,11 +924,17 @@
     $('complete-interstitial').classList.add('hidden');
     setStudyBehindVisible(true);
 
-    renderCurrentStudyCard();
+    renderCurrentStudyCard(false);
   }
 
   function exitStudySession() {
     stopSpeech();
+    if (session.active) {
+      persistCurrentSession(false);
+    }
+    appData.activeStudy = null;
+    S.saveData(appData);
+
     session.active = false;
     session.animatingJudge = false;
     document.body.classList.remove('input-cloze-hide');
@@ -723,7 +962,7 @@
     });
   }
 
-  function renderCurrentStudyCard() {
+  function renderCurrentStudyCard(initialFlipped = false) {
     stopSpeech();
     const card = getCurrentCard();
     if (!card) {
@@ -731,7 +970,7 @@
       return;
     }
 
-    session.isFlipped = false;
+    session.isFlipped = Boolean(initialFlipped) && (settings.format === 'flip' || settings.format === 'input');
     session.answeredCurrent = false;
     session.awaitingSelfJudge = false;
     session.animatingJudge = false;
@@ -795,7 +1034,7 @@
 
     const flipper = $('card-flipper');
     flipper.style.transition = 'none';
-    flipper.classList.remove('is-flipped');
+    flipper.classList.toggle('is-flipped', session.isFlipped);
     void flipper.offsetWidth;
     flipper.style.transition = '';
 
@@ -810,6 +1049,8 @@
     }
     if (settings.format === 'choice') renderMultipleChoice(card);
     if (settings.format === 'input') prepareInputMode(card);
+
+    persistCurrentSession(true);
   }
 
   function flipCard(forceState) {
@@ -817,6 +1058,7 @@
     stopSpeech();
     session.isFlipped = typeof forceState === 'boolean' ? forceState : !session.isFlipped;
     $('card-flipper').classList.toggle('is-flipped', session.isFlipped);
+    persistCurrentSession(true);
     haptic(12);
   }
 
@@ -1312,6 +1554,9 @@
     session.reviewQueue = [...session.wrongPool];
     session.reviewIndex = 0;
     session.mainStepsSinceReview = 0;
+    session.isFlipped = false;
+
+    persistCurrentSession(true);
 
     resetCardTransform(true);
     setStudyBehindVisible(false);
@@ -1323,6 +1568,12 @@
   function showCompleteScreen() {
     resetCardTransform(true);
     const deck = getActiveDeck();
+    if (deck) {
+      clearSavedSession(deck.id, settings.format);
+    }
+    appData.activeStudy = null;
+    S.saveData(appData);
+
     $('complete-summary').textContent = `${deck ? deck.title : ''} を完了しました`;
     $('complete-interstitial').classList.remove('hidden');
     haptic(25);
@@ -1762,6 +2013,7 @@
       const deck = getActiveDeck();
       if (!confirm(`「${deck.title}」を削除しますか？`)) return;
       const prevFolderId = deck.folderId && getFolderById(deck.folderId) ? deck.folderId : null;
+      clearAllSavedSessionsForDeck(deck.id);
       appData.decks = appData.decks.filter((d) => d.id !== deck.id);
       appData.activeDeckId = appData.decks[0].id;
       S.saveData(appData);
@@ -1789,12 +2041,13 @@
       });
     });
 
-    // 出題形式選択
+    // 出題形式選択（形式ごとに進捗表示を切り替え）
     document.querySelectorAll('.fmt-seg-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         haptic(8);
         settings.format = btn.dataset.format;
         document.querySelectorAll('.fmt-seg-btn').forEach((b) => b.classList.toggle('active', b === btn));
+        updateStartTargetCount();
       });
     });
 
@@ -1852,21 +2105,23 @@
       updateExamCountdown();
     });
 
-    // 学習開始・履歴リセット
-    $('btn-start-study')?.addEventListener('click', startStudySession);
+    // 学習開始（途中進捗があれば再開）・最初からやり直す・履歴リセット
+    $('btn-start-study')?.addEventListener('click', () => startStudySession(false));
+    $('btn-restart-fresh')?.addEventListener('click', () => startStudySession(true));
 
     $('btn-reset-progress')?.addEventListener('click', () => {
       const deck = getActiveDeck();
-      if (!deck || !confirm('この単語帳の正誤履歴をリセットしますか？')) return;
+      if (!deck || !confirm('この単語帳の正誤履歴と途中進捗をリセットしますか？')) return;
       deck.cards.forEach((c) => {
         c.correctCount = 0;
         c.wrongCount = 0;
         c.srsLevel = 0;
         c.nextReview = 0;
       });
+      clearAllSavedSessionsForDeck(deck.id);
       S.saveData(appData);
       refreshDeckHeaderAndFilters();
-      alert('学習履歴をリセットしました。');
+      alert('学習履歴と途中進捗をリセットしました。');
     });
 
     // 学習画面内ボタン
@@ -1918,7 +2173,7 @@
       renderCurrentStudyCard();
     });
 
-    $('btn-restart-session')?.addEventListener('click', startStudySession);
+    $('btn-restart-session')?.addEventListener('click', () => startStudySession(true));
     $('btn-complete-home')?.addEventListener('click', exitStudySession);
 
     // 赤文字入力判定
@@ -2096,6 +2351,34 @@
       applyThemeAndRedsheet();
       bindEvents();
       initCardSwipeAndFlip();
+
+      // ページ離脱・バックグラウンド移行時に現在の学習位置を確実に保存
+      const flushProgressOnLeave = () => {
+        if (session.active) {
+          persistCurrentSession(true);
+        }
+      };
+      window.addEventListener('pagehide', flushProgressOnLeave);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          flushProgressOnLeave();
+        }
+      });
+
+      // 前回学習途中でサイトを離れていた場合は、そのまま続きの画面を自動復元
+      if (appData.activeStudy && appData.activeStudy.deckId && appData.activeStudy.format) {
+        const targetDeck = appData.decks.find((d) => d.id === appData.activeStudy.deckId);
+        const saved = targetDeck ? getValidSavedSession(targetDeck.id, appData.activeStudy.format) : null;
+        if (targetDeck && saved) {
+          appData.activeDeckId = targetDeck.id;
+          currentFolderId = targetDeck.folderId && getFolderById(targetDeck.folderId) ? targetDeck.folderId : null;
+          restoreStudyFromSaved(saved, true);
+          return;
+        }
+        appData.activeStudy = null;
+        S.saveData(appData);
+      }
+
       showHomeView(null);
     } catch (err) {
       console.error('Init error:', err);

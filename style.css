@@ -642,6 +642,32 @@ body.input-cloze-hide .cloze-blank.revealed .cloze-inner {
   position: sticky;
   top: 6px;
   z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cta-start-btn.is-resume {
+  background: linear-gradient(135deg, var(--brand), #1d4ed8);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.28);
+}
+
+.restart-fresh-btn {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 13px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-sub);
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  transition: background 0.12s ease, transform 0.12s ease;
+}
+
+.restart-fresh-btn:active {
+  transform: scale(0.985);
 }
 
 .cta-start-btn {

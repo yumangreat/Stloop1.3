@@ -17,6 +17,8 @@
       theme: 'light',
       unorderedEnabled: true,
       unorderedDelimiters: DEFAULT_UNORDERED_DELIMITERS,
+      savedSessions: {},
+      activeStudy: null,
       folders: [],
       decks: [
         {
@@ -135,6 +137,8 @@
               : decks[0].id,
             examDate: parsed.examDate || '',
             theme: parsed.theme || 'light',
+            savedSessions: {},
+            activeStudy: null,
             folders,
             decks
           };
@@ -163,6 +167,12 @@
           }
           if (typeof parsed.unorderedDelimiters !== 'string') {
             parsed.unorderedDelimiters = DEFAULT_UNORDERED_DELIMITERS;
+          }
+          if (!parsed.savedSessions || typeof parsed.savedSessions !== 'object' || Array.isArray(parsed.savedSessions)) {
+            parsed.savedSessions = {};
+          }
+          if (!parsed.activeStudy || typeof parsed.activeStudy !== 'object' || !parsed.activeStudy.deckId || !parsed.activeStudy.format) {
+            parsed.activeStudy = null;
           }
           return parsed;
         }
