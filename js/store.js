@@ -15,6 +15,16 @@ export function getTodayKey(date = new Date()) {
   return `${y}-${m}-${d}`;
 }
 
+export function normalizeTestCount(val) {
+  const str = String(val ?? '10').trim().toUpperCase();
+  if (str === 'ALL') return 'ALL';
+  const num = parseInt(str, 10);
+  if (Number.isFinite(num) && num >= 1) {
+    return String(Math.min(9999, num));
+  }
+  return '10';
+}
+
 export function defaultPreferences() {
   return {
     studyType: 'memorize', // 'memorize' | 'test'
@@ -24,7 +34,7 @@ export function defaultPreferences() {
     reverse: false,
     shuffle: false,
     redsheet: false,
-    testCount: '10',       // '10' | '20' | '30' | 'ALL'
+    testCount: '10',       // 'ALL' or positive integer string
     testGrading: 'instant',// 'instant' | 'batch'
     testTimer: false
   };
@@ -59,6 +69,7 @@ export function createDefaultData() {
     activeDeckId: deckId,
     examDate: '',
     theme: 'light',
+    updatedAt: Date.now(),
     unorderedEnabled: true,
     unorderedDelimiters: DEFAULT_UNORDERED_DELIMITERS,
     preferences: defaultPreferences(),
@@ -127,7 +138,7 @@ function hydrateData(parsed) {
   if (!['memorize', 'test'].includes(prefs.studyType)) prefs.studyType = 'memorize';
   if (!['smart', 'all', 'weak', 'srs'].includes(prefs.mode)) prefs.mode = 'smart';
   if (!['flip', 'choice', 'input'].includes(prefs.format)) prefs.format = 'flip';
-  if (!['10', '20', '30', 'ALL'].includes(String(prefs.testCount))) prefs.testCount = '10';
+  prefs.testCount = normalizeTestCount(prefs.testCount);
   if (!['instant', 'batch'].includes(prefs.testGrading)) prefs.testGrading = 'instant';
 
   return {
@@ -136,6 +147,7 @@ function hydrateData(parsed) {
       : decks[0].id,
     examDate: typeof parsed.examDate === 'string' ? parsed.examDate : '',
     theme: parsed.theme === 'dark' ? 'dark' : 'light',
+    updatedAt: Number(parsed.updatedAt || Date.now()),
     unorderedEnabled: typeof parsed.unorderedEnabled === 'boolean' ? parsed.unorderedEnabled : true,
     unorderedDelimiters: typeof parsed.unorderedDelimiters === 'string'
       ? parsed.unorderedDelimiters
@@ -153,6 +165,43 @@ function hydrateData(parsed) {
     folders,
     decks
   };
+}
+
+/**
+ * Replaces appData in-place with a cloud snapshot while preserving local
+ * IndexedDB image refs for cards whose IDs still exist locally.
+ */
+export function replaceAppDataInPlace(target, incomingRaw, cloudUpdatedAt = Date.now()) {
+  const localImagesByCardId = new Map();
+  for (const d of target.decks || []) {
+    for (const c of d.cards || []) {
+      if (c.id && c.image) localImagesByCardId.set(c.id, c.image);
+    }
+  }
+
+  const hydrated = hydrateData({ ...incomingRaw, updatedAt: cloudUpdatedAt });
+  if (!hydrated) return;
+
+  for (const d of hydrated.decks) {
+    for (const c of d.cards) {
+      if (!c.image && localImagesByCardId.has(c.id)) {
+        c.image = localImagesByCardId.get(c.id);
+      }
+    }
+  }
+
+  target.folders = hydrated.folders;
+  target.decks = hydrated.decks;
+  target.activeDeckId = hydrated.activeDeckId;
+  target.examDate = hydrated.examDate;
+  target.theme = hydrated.theme;
+  target.unorderedEnabled = hydrated.unorderedEnabled;
+  target.unorderedDelimiters = hydrated.unorderedDelimiters;
+  target.preferences = hydrated.preferences;
+  target.studyLog = hydrated.studyLog;
+  target.updatedAt = Number(cloudUpdatedAt || Date.now());
+  target.savedSessions = {};
+  target.activeStudy = null;
 }
 
 function migrateLegacyData() {
@@ -205,8 +254,11 @@ export function loadData() {
   return fresh;
 }
 
-export function saveData(data, onError) {
+export function saveData(data, onError, preserveTimestamp = false) {
   try {
+    if (!preserveTimestamp) {
+      data.updatedAt = Date.now();
+    }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     return true;
   } catch (e) {
@@ -232,7 +284,6 @@ export function getStudyStreak(appData) {
   const cursor = new Date();
   cursor.setHours(0, 0, 0, 0);
 
-  // If today hasn't been studied yet, check starting from yesterday
   if (!log[getTodayKey(cursor)]) {
     cursor.setDate(cursor.getDate() - 1);
   }

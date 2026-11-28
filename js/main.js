@@ -6,6 +6,8 @@ import { getValidSavedSession } from './study-engine.js';
 import { createHomeView } from './views/home-view.js';
 import { createDeckView } from './views/deck-view.js';
 import { createStudyView } from './views/study-view.js';
+import { createShareView } from './views/share-view.js';
+import { createSyncView } from './views/sync-view.js';
 import {
   showAlert,
   showChoiceDialog,
@@ -29,11 +31,18 @@ document.addEventListener('DOMContentLoaded', () => {
   let homeView;
   let deckView;
   let studyView;
+  let shareView;
+  let syncView;
 
-  function save() {
+  function saveRaw(preserveTimestamp = false) {
     saveData(appData, () => {
       showAlert('保存容量の上限です', '不要な単語帳を削除するか、バックアップ後にデータを整理してください。');
-    });
+    }, preserveTimestamp);
+  }
+
+  function save() {
+    saveRaw(false);
+    if (syncView) syncView.scheduleAutoSync();
   }
 
   function savePreferences() {
@@ -61,6 +70,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (studyBtn) studyBtn.classList.toggle('active', Boolean(settings.redsheet));
   }
 
+  function refreshAllViewsAfterSync() {
+    applyThemeAndRedsheet();
+    if (!$('view-home')?.classList.contains('hidden')) {
+      homeView.render();
+    } else if (!$('view-deck')?.classList.contains('hidden')) {
+      deckView.syncControlsFromSettings();
+      deckView.refreshHeaderAndFilters();
+      if ($('panel-manage')?.classList.contains('active')) deckView.renderManageTab();
+    }
+  }
+
   async function importBackupPayload(result, contextMode) {
     const totalCards = result.decks.reduce((s, d) => s + d.cards.length, 0);
     const folderCount = (result.folders || []).length;
@@ -76,7 +96,6 @@ document.addEventListener('DOMContentLoaded', () => {
     );
     if (!mode) return;
 
-    // Restore images into IndexedDB if JSON backup included them
     const imgRefMap = new Map();
     if (result.images && typeof result.images === 'object') {
       for (const [oldRef, dataUrl] of Object.entries(result.images)) {
@@ -152,7 +171,6 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const text = await readFileTextSmart(file);
 
-      // 1. JSON full backup
       if (file.name.toLowerCase().endsWith('.json') || text.trim().startsWith('{')) {
         const parsedJson = parseBackupJson(text);
         if (parsedJson && parsedJson.decks.length > 0) {
@@ -161,13 +179,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // 2. CSV auto-detect
       const result = parseCsvAuto(text);
       if (result.type === 'backup' && result.decks.length > 0) {
         await importBackupPayload(result, contextMode);
       } else if (result.type === 'cards' && result.cards.length > 0) {
         if (contextMode === 'home') {
-          // Fixed UX: On home screen, create a new deck named after the CSV file!
           const deckTitle = file.name.replace(/\.csv$/i, '').trim() || 'インポート単語帳';
           const newDeck = {
             id: uid('deck'),
@@ -203,14 +219,17 @@ document.addEventListener('DOMContentLoaded', () => {
     state,
     haptic,
     save,
+    saveRaw,
     savePreferences,
     getActiveDeck,
     applyThemeAndRedsheet,
+    refreshAllViewsAfterSync,
     handleImportFile,
     showHomeView: (folderId) => homeView.show(folderId),
     openDeckView: (deckId, tab) => deckView.open(deckId, tab),
     openFolderMoveModal: (deckId) => homeView.openFolderMoveModal(deckId),
     openCardEditModal: (card, onSaved) => deckView.openEditModal(card, onSaved),
+    openShareModal: (deckIds) => shareView.openShareModal(deckIds),
     startMemorizeSession: (forceFresh) => studyView.startMemorize(forceFresh),
     startTestSession: (customIds) => studyView.startTest(customIds),
     quickStartDeck: (deckId) => {
@@ -229,8 +248,9 @@ document.addEventListener('DOMContentLoaded', () => {
   homeView = createHomeView(ctx);
   deckView = createDeckView(ctx);
   studyView = createStudyView(ctx);
+  shareView = createShareView(ctx);
+  syncView = createSyncView(ctx);
 
-  // Theme toggle
   $('btn-theme')?.addEventListener('click', () => {
     appData.theme = appData.theme === 'dark' ? 'light' : 'dark';
     save();
@@ -240,17 +260,21 @@ document.addEventListener('DOMContentLoaded', () => {
   homeView.bindEvents();
   deckView.bindEvents();
   studyView.bindEvents();
+  shareView.bindEvents();
+  syncView.bindEvents();
+
   initModalListeners(() => {
     deckView.closeEditModal();
     homeView.closeFolderMoveModal();
+    shareView.closeShareModal();
+    shareView.closeSearchModal();
+    shareView.closeImportShareModal();
+    syncView.closeSyncModal();
   });
 
   applyThemeAndRedsheet();
+  migrateInlineImages(appData, () => saveRaw(true));
 
-  // Background migration of legacy base64 images to IndexedDB
-  migrateInlineImages(appData, () => save());
-
-  // Persist memorize progress on page leave / background
   const flushProgress = () => {
     if (studyView.isActive()) studyView.persistCurrentSession(true);
   };
@@ -259,11 +283,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.visibilityState === 'hidden') flushProgress();
   });
 
-  // Register Service Worker for PWA offline capability
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     navigator.serviceWorker.register('./sw.js').catch((err) => {
       console.warn('SW register skipped:', err);
     });
+  }
+
+  // Check incoming shared URL (?share=ID)
+  const incomingShareId = new URLSearchParams(window.location.search).get('share');
+  if (incomingShareId) {
+    homeView.show(null);
+    shareView.openIncomingShare(incomingShareId, true);
+    syncView.autoCheckOnStartup();
+    return;
   }
 
   // Auto-restore if user left mid-memorize session
@@ -276,11 +308,13 @@ document.addEventListener('DOMContentLoaded', () => {
         ? targetDeck.folderId
         : null;
       studyView.restoreFromSaved(saved, true);
+      syncView.autoCheckOnStartup();
       return;
     }
     appData.activeStudy = null;
-    save();
+    saveRaw(true);
   }
 
   homeView.show(null);
+  syncView.autoCheckOnStartup();
 });

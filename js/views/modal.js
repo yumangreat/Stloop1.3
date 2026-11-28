@@ -213,7 +213,7 @@ export function closeShortcutsModal() {
 }
 
 export function isAnyModalOpen() {
-  const ids = ['app-dialog-modal', 'edit-modal', 'folder-move-modal', 'image-lightbox', 'shortcuts-modal'];
+  const ids = ['app-dialog-modal', 'edit-modal', 'folder-move-modal', 'image-lightbox', 'shortcuts-modal', 'search-modal', 'share-modal', 'import-share-modal', 'sync-modal'];
   return ids.some((id) => {
     const el = $(id);
     return el && !el.classList.contains('hidden');

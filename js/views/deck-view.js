@@ -1,6 +1,6 @@
 import { ICONS } from '../icons.js';
 import { renderContent, escapeHtml, DEFAULT_UNORDERED_DELIMITERS } from '../math-renderer.js';
-import { normalizeCard } from '../store.js';
+import { normalizeCard, normalizeTestCount } from '../store.js';
 import {
   getFilteredCards,
   getValidSavedSession,
@@ -72,9 +72,22 @@ export function createDeckView(ctx) {
     document.querySelectorAll('.fmt-seg-btn').forEach((b) => {
       b.classList.toggle('active', b.dataset.format === s.format);
     });
+    const presets = ['10', '20', '50', 'ALL'];
+    const normCount = normalizeTestCount(s.testCount);
+    const isPreset = presets.includes(normCount);
     document.querySelectorAll('.test-count-btn').forEach((b) => {
-      b.classList.toggle('active', String(b.dataset.count) === String(s.testCount));
+      b.classList.toggle('active', isPreset && String(b.dataset.count) === normCount);
     });
+    const customInput = $('input-test-custom-count');
+    if (customInput) {
+      if (!isPreset) {
+        if (document.activeElement !== customInput) customInput.value = normCount;
+        customInput.classList.add('active');
+      } else {
+        if (document.activeElement !== customInput) customInput.value = '';
+        customInput.classList.remove('active');
+      }
+    }
     document.querySelectorAll('.test-grading-btn').forEach((b) => {
       b.classList.toggle('active', b.dataset.grading === s.testGrading);
     });
@@ -461,14 +474,35 @@ export function createDeckView(ctx) {
       });
     });
 
+    $('btn-share-deck')?.addEventListener('click', () => {
+      const deck = ctx.getActiveDeck();
+      if (deck) ctx.openShareModal([deck.id]);
+    });
+
     document.querySelectorAll('.test-count-btn').forEach((btn) => {
       btn.addEventListener('click', () => {
         ctx.haptic(8);
         ctx.settings.testCount = btn.dataset.count;
+        const customInput = $('input-test-custom-count');
+        if (customInput) customInput.value = '';
         ctx.savePreferences();
         syncControlsFromSettings();
         updateStartButton();
       });
+    });
+
+    $('input-test-custom-count')?.addEventListener('input', (e) => {
+      const raw = e.target.value.replace(/[^0-9]/g, '');
+      if (e.target.value !== raw) e.target.value = raw;
+      if (!raw) {
+        ctx.settings.testCount = 'ALL';
+      } else {
+        const n = Math.max(1, Math.min(9999, parseInt(raw, 10)));
+        ctx.settings.testCount = String(n);
+      }
+      ctx.savePreferences();
+      syncControlsFromSettings();
+      updateStartButton();
     });
 
     document.querySelectorAll('.test-grading-btn').forEach((btn) => {

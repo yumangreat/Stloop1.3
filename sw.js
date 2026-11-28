@@ -1,4 +1,4 @@
-const CACHE_NAME = 'studyloop-v2.0.0';
+const CACHE_NAME = 'studyloop-v2.1.0';
 const APP_ASSETS = [
   './',
   './index.html',
@@ -12,6 +12,7 @@ const APP_ASSETS = [
   './css/deck.css',
   './css/study.css',
   './css/stats.css',
+  './css/cloud.css',
   './js/main.js',
   './js/icons.js',
   './js/store.js',
@@ -21,11 +22,15 @@ const APP_ASSETS = [
   './js/swipe.js',
   './js/speech.js',
   './js/backup.js',
+  './js/share-service.js',
+  './js/gist-sync.js',
   './js/views/modal.js',
   './js/views/home-view.js',
   './js/views/deck-view.js',
   './js/views/study-view.js',
-  './js/views/stats-view.js'
+  './js/views/stats-view.js',
+  './js/views/share-view.js',
+  './js/views/sync-view.js'
 ];
 
 const CDN_CACHE_PREFIXES = [
@@ -61,7 +66,6 @@ self.addEventListener('fetch', (event) => {
   if (!isSameOrigin && !isCdnAsset) return;
 
   if (isCdnAsset) {
-    // Cache-first for immutable versioned KaTeX assets & fonts
     event.respondWith(
       caches.match(req).then((cached) => {
         if (cached) return cached;
@@ -77,7 +81,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first with cache fallback for app files (so GitHub Pages updates reflect cleanly)
+  // Strip query strings like ?share=... when falling back to index.html offline
   event.respondWith(
     fetch(req)
       .then((res) => {

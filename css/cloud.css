@@ -1,0 +1,364 @@
+/* ==================== テスト問題数カスタム入力 ==================== */
+.test-count-custom-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.test-custom-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.test-custom-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 11px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  font-size: 0.88rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.test-custom-input:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
+.test-custom-input.active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+/* ==================== ヘッダー同期ドット ==================== */
+.icon-btn.has-badge {
+  position: relative;
+}
+
+.sync-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cta);
+  border: 1.5px solid var(--surface);
+}
+
+.sync-dot.pending {
+  background: var(--amber);
+}
+
+.sync-dot.error {
+  background: var(--wrong);
+}
+
+/* ==================== 大型シート系モーダル（共有・検索・同期） ==================== */
+.modal-card.wide {
+  max-width: 460px;
+  max-height: 86dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 18px 20px;
+}
+
+.modal-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.modal-close-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-tint);
+  color: var(--muted);
+  display: inline-grid;
+  place-items: center;
+}
+
+.modal-scroll-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 2px;
+}
+
+.modal-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--surface-muted);
+  padding: 3px;
+  border-radius: 10px;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.modal-tab-btn {
+  border: none;
+  background: transparent;
+  padding: 7px 6px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.modal-tab-btn.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ==================== 共有チェックリスト ==================== */
+.select-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.select-toolbar-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.share-deck-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 28dvh;
+  overflow-y: auto;
+  padding: 2px 0;
+}
+
+.share-folder-group {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-tint);
+  overflow: hidden;
+}
+
+.share-folder-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 11px;
+  background: var(--surface-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.share-folder-children {
+  display: flex;
+  flex-direction: column;
+}
+
+.share-check-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.share-folder-children .share-check-row {
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding-left: 20px;
+}
+
+.share-check-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.share-check-left input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--brand);
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.share-check-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.share-check-count {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* 共有結果ボックス */
+.share-result-box {
+  background: var(--brand-soft);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.share-url-row {
+  display: flex;
+  gap: 6px;
+}
+
+.share-url-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.78rem;
+  color: var(--text);
+}
+
+/* 自分の共有一覧 & 公開検索カード */
+.cloud-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cloud-item-card {
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cloud-item-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cloud-item-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.cloud-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.vis-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-sub);
+}
+
+.vis-pill.public {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.cloud-item-cats {
+  font-size: 0.75rem;
+  color: var(--text-sub);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cloud-item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+/* 検索バー */
+.search-bar-row {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cloud-status-msg {
+  text-align: center;
+  padding: 22px 12px;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+/* 同期ステータスカード */
+.sync-status-card {
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sync-status-main {
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.sync-status-sub {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.sync-guide-steps {
+  margin: 0;
+  padding: 0 12px 12px 26px;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--text-sub);
+}

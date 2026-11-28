@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="./css/deck.css">
   <link rel="stylesheet" href="./css/study.css">
   <link rel="stylesheet" href="./css/stats.css">
+  <link rel="stylesheet" href="./css/cloud.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 </head>
@@ -32,6 +33,16 @@
       </div>
       <div class="header-actions">
         <span id="home-streak-pill" class="streak-pill hidden" title="連続学習日数"></span>
+        <button type="button" id="btn-open-search" class="icon-btn" aria-label="公開単語帳を検索" title="公開検索">
+          <svg class="ic sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
+        <button type="button" id="btn-open-share" class="icon-btn" aria-label="URL共有" title="URL共有">
+          <svg class="ic sm" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        </button>
+        <button type="button" id="btn-open-sync" class="icon-btn has-badge" aria-label="クラウド同期" title="クラウド同期">
+          <svg class="ic sm" viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+          <span id="sync-status-dot" class="sync-dot hidden"></span>
+        </button>
         <button type="button" id="btn-theme" class="icon-btn" aria-label="テーマ切替" title="ダークモード切替"></button>
       </div>
     </header>
@@ -96,6 +107,9 @@
       </button>
       <h2 id="current-deck-title" class="sub-header-title">単語帳</h2>
       <div class="sub-header-tools">
+        <button type="button" id="btn-share-deck" class="icon-btn small" title="この単語帳をURL共有" aria-label="この単語帳を共有">
+          <svg class="ic sm" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        </button>
         <button type="button" id="btn-move-deck-folder" class="icon-btn small" title="フォルダ移動" aria-label="フォルダ移動">
           <svg class="ic" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         </button>
@@ -172,8 +186,12 @@
           <div class="format-segment four-col">
             <button type="button" class="test-count-btn active" data-count="10">10問</button>
             <button type="button" class="test-count-btn" data-count="20">20問</button>
-            <button type="button" class="test-count-btn" data-count="30">30問</button>
+            <button type="button" class="test-count-btn" data-count="50">50問</button>
             <button type="button" class="test-count-btn" data-count="ALL">全問</button>
+          </div>
+          <div class="test-count-custom-row">
+            <span class="test-custom-label">自由入力</span>
+            <input type="text" id="input-test-custom-count" class="test-custom-input" inputmode="numeric" pattern="[0-9]*" placeholder="例: 40, 100" aria-label="テスト出題数を入力">
           </div>
         </div>
 
@@ -610,6 +628,177 @@
         <div class="shortcut-row"><span>この画面を開く</span><kbd>?</kbd></div>
       </div>
       <button type="button" id="btn-shortcuts-close" class="solid-action-btn" style="width: 100%; margin-top: 14px;">閉じる</button>
+    </div>
+  </div>
+
+  <!-- ==================== URL共有モーダル ==================== -->
+  <div id="share-modal" class="modal-backdrop hidden">
+    <div class="modal-card wide">
+      <div class="modal-header-row">
+        <div class="modal-title">URL共有</div>
+        <button type="button" id="btn-share-close" class="modal-close-btn" aria-label="閉じる">
+          <svg class="ic sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="modal-tabs">
+        <button type="button" id="btn-share-tab-create" class="modal-tab-btn active">共有を作成</button>
+        <button type="button" id="btn-share-tab-manage" class="modal-tab-btn">自分の共有</button>
+      </div>
+
+      <!-- 作成パネル -->
+      <div id="share-panel-create" class="modal-scroll-body">
+        <div id="share-update-banner" class="row-between hidden">
+          <span id="share-update-label" class="muted-small" style="color: var(--brand); font-weight: 700;"></span>
+          <button type="button" id="btn-share-cancel-update" class="mini-link-btn">新規作成に戻す</button>
+        </div>
+
+        <div class="select-toolbar">
+          <span id="share-selected-summary" class="muted-small">0冊選択中</span>
+          <div class="select-toolbar-btns">
+            <button type="button" id="btn-share-select-all" class="mini-link-btn">全選択</button>
+            <button type="button" id="btn-share-clear-all" class="mini-link-btn">解除</button>
+          </div>
+        </div>
+
+        <div id="share-deck-list" class="share-deck-list"></div>
+
+        <div class="group-block">
+          <div class="group-heading">公開範囲</div>
+          <div class="format-segment two-col">
+            <button type="button" class="fmt-seg-btn share-vis-btn active" data-visibility="unlisted">URL限定</button>
+            <button type="button" class="fmt-seg-btn share-vis-btn" data-visibility="public">検索に公開</button>
+          </div>
+        </div>
+
+        <div class="form-stack">
+          <input type="text" id="share-title-input" class="clean-input" placeholder="共有タイトル">
+          <input type="text" id="share-author-input" class="clean-input" placeholder="作成者名（任意）">
+          <div id="share-passcode-wrap" class="hidden">
+            <input type="password" id="share-passcode-input" class="clean-input" placeholder="合言葉">
+          </div>
+        </div>
+
+        <div id="share-result-box" class="share-result-box hidden">
+          <div class="muted-small" style="color: var(--brand); font-weight: 700;">共有URL（受け取る側は登録不要）</div>
+          <div class="share-url-row">
+            <input type="text" id="share-result-url" class="share-url-input" readonly>
+            <button type="button" id="btn-copy-share-url" class="mini-link-btn">コピー</button>
+          </div>
+        </div>
+
+        <button type="button" id="btn-publish-share" class="solid-action-btn primary" style="width: 100%;">短縮URLを発行</button>
+        <button type="button" id="btn-share-export-json" class="outline-full-btn">選択分をJSONファイルで保存</button>
+      </div>
+
+      <!-- 管理パネル -->
+      <div id="share-panel-manage" class="modal-scroll-body hidden">
+        <div id="my-shares-list" class="cloud-item-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 公開単語帳検索モーダル ==================== -->
+  <div id="search-modal" class="modal-backdrop hidden">
+    <div class="modal-card wide">
+      <div class="modal-header-row">
+        <div class="modal-title">公開単語帳を検索</div>
+        <button type="button" id="btn-search-close" class="modal-close-btn" aria-label="閉じる">
+          <svg class="ic sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="search-bar-row">
+        <input type="search" id="public-search-input" class="clean-input" placeholder="タイトル・単元・問題文で検索...">
+        <button type="button" id="btn-public-search-go" class="solid-action-btn primary" style="white-space: nowrap;">検索</button>
+      </div>
+
+      <div class="modal-scroll-body">
+        <div id="public-search-list" class="cloud-item-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 共有取り込みプレビューモーダル ==================== -->
+  <div id="import-share-modal" class="modal-backdrop hidden">
+    <div class="modal-card wide">
+      <div class="modal-header-row">
+        <div id="import-share-title" class="modal-title">共有単語帳</div>
+        <button type="button" id="btn-import-share-close" class="modal-close-btn" aria-label="閉じる">
+          <svg class="ic sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div id="import-share-meta" class="muted-small"></div>
+
+      <div class="modal-scroll-body">
+        <div id="import-share-deck-list" class="share-deck-list" style="max-height: 44dvh;"></div>
+      </div>
+
+      <div class="interstitial-actions">
+        <button type="button" id="btn-cancel-import-share" class="solid-action-btn">閉じる</button>
+        <button type="button" id="btn-confirm-import-share" class="solid-action-btn primary">取り込む</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== GitHub Gist クラウド同期モーダル ==================== -->
+  <div id="sync-modal" class="modal-backdrop hidden">
+    <div class="modal-card wide">
+      <div class="modal-header-row">
+        <div class="modal-title">クラウド同期（GitHub Gist）</div>
+        <button type="button" id="btn-sync-close" class="modal-close-btn" aria-label="閉じる">
+          <svg class="ic sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="modal-scroll-body">
+        <!-- 未接続 -->
+        <div id="sync-setup-section" class="form-stack">
+          <input type="password" id="sync-token-input" class="clean-input" placeholder="GitHub Personal Access Token (gist権限)" autocomplete="off">
+          <button type="button" id="btn-sync-connect" class="solid-action-btn primary" style="width: 100%;">接続して同期</button>
+
+          <details class="advanced-details">
+            <summary class="advanced-summary">
+              <span>トークン発行手順（初回のみ・無料）</span>
+              <svg class="ic sm chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+            </summary>
+            <ol class="sync-guide-steps">
+              <li>GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) を開く</li>
+              <li>「Generate new token (classic)」を押す</li>
+              <li>スコープで <strong>gist</strong> のみにチェックを入れて発行</li>
+              <li>表示されたトークンを上の欄に貼り付ける（2台目も同じトークンを入れるだけで自動検出されます）</li>
+            </ol>
+          </details>
+        </div>
+
+        <!-- 接続済み -->
+        <div id="sync-connected-section" class="form-stack hidden">
+          <div class="sync-status-card">
+            <div>
+              <div id="sync-account-label" class="sync-status-main">接続済み</div>
+              <div id="sync-last-time" class="sync-status-sub">未同期</div>
+            </div>
+            <button type="button" id="btn-sync-now" class="solid-action-btn primary">今すぐ同期</button>
+          </div>
+
+          <div class="switch-list">
+            <label class="switch-row" for="opt-auto-sync">
+              <span class="switch-title">自動同期</span>
+              <input type="checkbox" id="opt-auto-sync" class="ios-switch" checked>
+            </label>
+          </div>
+
+          <div class="grid-2">
+            <button type="button" id="btn-sync-pull" class="outline-full-btn">クラウドから取得</button>
+            <button type="button" id="btn-sync-push" class="outline-full-btn">クラウドへ上書き</button>
+          </div>
+
+          <div class="danger-zone">
+            <button type="button" id="btn-sync-disconnect" class="text-danger-btn">この端末の同期を解除</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
