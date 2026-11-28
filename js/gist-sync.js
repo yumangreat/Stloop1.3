@@ -93,16 +93,28 @@ export function buildCloudPayload(appData) {
 
 export async function verifyTokenAndFindGist(token) {
   const userRes = await fetch('https://api.github.com/user', {
-    headers: authHeaders(token)
+    headers: authHeaders(token),
+    cache: 'no-store'
   });
   if (!userRes.ok) {
-    throw new Error('トークンが無効です。gist 権限付きトークンを確認してください。');
+    throw new Error('トークンが無効です。gist 権限付きトークン（Tokens classic）を確認してください。');
   }
+
+  // If GitHub exposes X-OAuth-Scopes via CORS, validate gist scope upfront
+  const scopesHeader = userRes.headers.get('x-oauth-scopes');
+  if (scopesHeader !== null) {
+    const scopes = scopesHeader.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+    if (!scopes.includes('gist')) {
+      throw new Error('このトークンに「gist」権限が付いていません。GitHubで「Tokens (classic)」から gist にチェックを入れて再発行してください。');
+    }
+  }
+
   const user = await userRes.json();
 
   let foundGistId = '';
   const gistsRes = await fetch('https://api.github.com/gists?per_page=100', {
-    headers: authHeaders(token)
+    headers: authHeaders(token),
+    cache: 'no-store'
   });
   if (gistsRes.ok) {
     const gists = await gistsRes.json();
@@ -170,7 +182,6 @@ export async function pushCloudSnapshot(token, gistId, appData) {
       body: JSON.stringify(body)
     });
     if (res.status === 404) {
-      // Gist was deleted remotely; recreate it
       res = await fetch('https://api.github.com/gists', {
         method: 'POST',
         headers: authHeaders(token),
@@ -186,6 +197,12 @@ export async function pushCloudSnapshot(token, gistId, appData) {
   }
 
   if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error('トークンの認証に失敗しました（401）。同期を解除してトークンを入れ直してください。');
+    }
+    if (res.status === 403 || res.status === 404) {
+      throw new Error(`クラウド保存権限エラー (${res.status})。トークン作成時に「Tokens (classic)」で「gist」にチェックが入っているか確認してください。`);
+    }
     throw new Error(`クラウド保存エラー (${res.status})`);
   }
   const gist = await res.json();

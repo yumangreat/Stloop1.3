@@ -25,6 +25,18 @@ export function createSyncView(ctx) {
   let autoSyncTimer = null;
   let syncState = 'idle'; // 'idle' | 'pending' | 'synced' | 'error'
 
+  function setSyncButtonsBusy(busy) {
+    const nowBtn = $('btn-sync-now');
+    if (nowBtn) {
+      nowBtn.disabled = busy;
+      nowBtn.textContent = busy ? '同期中...' : '今すぐ同期';
+    }
+    ['btn-sync-pull', 'btn-sync-push', 'btn-sync-disconnect'].forEach((id) => {
+      const el = $(id);
+      if (el) el.disabled = busy;
+    });
+  }
+
   function updateHeaderDot() {
     const dot = $('sync-status-dot');
     if (!dot) return;
@@ -34,8 +46,11 @@ export function createSyncView(ctx) {
       return;
     }
     dot.classList.remove('hidden', 'pending', 'error');
-    if (syncState === 'pending') dot.classList.add('pending');
-    if (syncState === 'error') dot.classList.add('error');
+    if (syncState === 'error') {
+      dot.classList.add('error');
+    } else if (syncState === 'pending' || !cfg.lastSyncedAt) {
+      dot.classList.add('pending');
+    }
   }
 
   function renderModalState() {
@@ -50,6 +65,7 @@ export function createSyncView(ctx) {
       $('sync-last-time').textContent = `最終同期: ${formatSyncTime(cfg.lastSyncedAt)}`;
       const autoEl = $('opt-auto-sync');
       if (autoEl) autoEl.checked = cfg.autoSync !== false;
+      setSyncButtonsBusy(syncInProgress);
     } else {
       const inp = $('sync-token-input');
       if (inp) inp.value = '';
@@ -77,6 +93,7 @@ export function createSyncView(ctx) {
     const cfg = loadSyncConfig();
     if (!cfg.token || syncInProgress) return;
     syncInProgress = true;
+    setSyncButtonsBusy(true);
 
     try {
       let gistId = cfg.gistId;
@@ -200,6 +217,7 @@ export function createSyncView(ctx) {
       }
     } finally {
       syncInProgress = false;
+      setSyncButtonsBusy(false);
     }
   }
 
@@ -241,10 +259,10 @@ export function createSyncView(ctx) {
         autoSync: true,
         lastSyncedAt: 0
       });
+      syncState = 'pending';
       renderModalState();
 
       if (info.gistId) {
-        // Existing cloud Gist found: ask user whether to pull or overwrite
         const choice = await showChoiceDialog(
           `@${info.username} に接続しました`,
           'クラウド上に既存のStudyLoopデータが見つかりました。',
@@ -263,6 +281,7 @@ export function createSyncView(ctx) {
     } finally {
       btn.disabled = false;
       btn.textContent = '接続して同期';
+      renderModalState();
     }
   }
 
@@ -277,6 +296,7 @@ export function createSyncView(ctx) {
     $('btn-sync-now')?.addEventListener('click', () => runSmartSync({ silent: false }));
 
     $('btn-sync-pull')?.addEventListener('click', async () => {
+      if (syncInProgress) return;
       const ok = await showConfirm('クラウドから取り込む', 'この端末のデータがクラウドの最新データで置き換わります。', {
         confirmLabel: '取り込む',
         danger: true
@@ -285,6 +305,7 @@ export function createSyncView(ctx) {
     });
 
     $('btn-sync-push')?.addEventListener('click', async () => {
+      if (syncInProgress) return;
       const ok = await showConfirm('クラウドへ上書き保存', 'クラウド側のデータをこの端末の内容で上書きします。', {
         confirmLabel: '上書き保存',
         danger: true
@@ -300,6 +321,7 @@ export function createSyncView(ctx) {
     });
 
     $('btn-sync-disconnect')?.addEventListener('click', async () => {
+      if (syncInProgress) return;
       const ok = await showConfirm('クラウド同期を解除しますか？', 'この端末のデータやGist自体は消えません。', {
         confirmLabel: '解除',
         danger: true

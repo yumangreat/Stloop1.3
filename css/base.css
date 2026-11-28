@@ -162,6 +162,13 @@ button {
   transform: scale(0.985);
 }
 
+.solid-action-btn:disabled,
+.outline-full-btn:disabled,
+.text-danger-btn:disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 .solid-action-btn.primary {
   background: var(--brand);
   color: #ffffff;
@@ -333,6 +340,10 @@ body.input-cloze-hide .cloze-blank.revealed .cloze-inner {
   align-items: center;
   justify-content: center;
   padding: 20px;
+}
+
+#app-dialog-modal {
+  z-index: 80;
 }
 
 .interstitial-overlay.solid-bg {

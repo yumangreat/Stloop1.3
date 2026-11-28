@@ -31,9 +31,7 @@ export function showToast(message, options = {}) {
   }, duration);
 }
 
-function closeAppDialog(result) {
-  const modal = $('app-dialog-modal');
-  if (modal) modal.classList.add('hidden');
+function settlePendingDialog(result) {
   if (typeof activeDialogResolve === 'function') {
     const fn = activeDialogResolve;
     activeDialogResolve = null;
@@ -41,10 +39,17 @@ function closeAppDialog(result) {
   }
 }
 
+function closeAppDialog(result) {
+  const modal = $('app-dialog-modal');
+  if (modal) modal.classList.add('hidden');
+  settlePendingDialog(result);
+}
+
 export function showAlert(title, message = '') {
+  settlePendingDialog(null);
   return new Promise((resolve) => {
     const modal = $('app-dialog-modal');
-    if (!modal) { resolve(); return; }
+    if (!modal) { resolve(true); return; }
     activeDialogResolve = resolve;
 
     $('dialog-title').textContent = title;
@@ -70,6 +75,7 @@ export function showAlert(title, message = '') {
 }
 
 export function showConfirm(title, message = '', options = {}) {
+  settlePendingDialog(false);
   const { confirmLabel = 'OK', cancelLabel = 'キャンセル', danger = false } = options;
   return new Promise((resolve) => {
     const modal = $('app-dialog-modal');
@@ -106,6 +112,7 @@ export function showConfirm(title, message = '', options = {}) {
 }
 
 export function showPrompt(title, defaultValue = '', options = {}) {
+  settlePendingDialog(null);
   const { placeholder = '', confirmLabel = '決定' } = options;
   return new Promise((resolve) => {
     const modal = $('app-dialog-modal');
@@ -156,6 +163,7 @@ export function showPrompt(title, defaultValue = '', options = {}) {
 }
 
 export function showChoiceDialog(title, message, choices) {
+  settlePendingDialog(null);
   return new Promise((resolve) => {
     const modal = $('app-dialog-modal');
     if (!modal) { resolve(null); return; }
