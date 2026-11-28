@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="StudyLoop">
+  <title>StudyLoop</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <link rel="stylesheet" href="./css/tokens.css">
+  <link rel="stylesheet" href="./css/base.css">
+  <link rel="stylesheet" href="./css/home.css">
+  <link rel="stylesheet" href="./css/deck.css">
+  <link rel="stylesheet" href="./css/study.css">
+  <link rel="stylesheet" href="./css/stats.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+</head>
+<body>
+
+  <!-- ==================== 第1段階：ホーム ==================== -->
+  <div id="view-home" class="view-container">
+    <header class="app-header">
+      <div class="brand-wrap">
+        <span class="brand-mark">SL</span>
+        <span class="brand-name">StudyLoop</span>
+      </div>
+      <div class="header-actions">
+        <span id="home-streak-pill" class="streak-pill hidden" title="連続学習日数"></span>
+        <button type="button" id="btn-theme" class="icon-btn" aria-label="テーマ切替" title="ダークモード切替"></button>
+      </div>
+    </header>
+
+    <section id="home-hero" class="home-hero">
+      <h1 class="hero-title">マイ単語帳</h1>
+    </section>
+
+    <div id="folder-nav-bar" class="folder-nav-bar hidden">
+      <button type="button" id="btn-folder-back" class="nav-back-btn" aria-label="一覧へ戻る">
+        <svg class="ic" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        <span>一覧</span>
+      </button>
+      <div class="folder-nav-center">
+        <h2 id="current-folder-title" class="folder-nav-title">フォルダ</h2>
+      </div>
+      <div class="sub-header-tools">
+        <button type="button" id="btn-rename-folder" class="icon-btn small" title="名前変更" aria-label="フォルダ名変更">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        </button>
+        <button type="button" id="btn-delete-folder" class="icon-btn small danger" title="削除" aria-label="フォルダ削除">
+          <svg class="ic" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="home-folder-list" class="folder-list"></div>
+    <div id="home-deck-list" class="deck-list"></div>
+
+    <div class="home-bottom-actions">
+      <div class="create-action-row" id="home-create-row">
+        <button type="button" id="btn-new-deck" class="cta-primary-btn">
+          <svg class="ic" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>新しい単語帳</span>
+        </button>
+        <button type="button" id="btn-new-folder" class="cta-secondary-btn">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+          <span>フォルダ作成</span>
+        </button>
+      </div>
+
+      <div class="backup-bar">
+        <button type="button" id="btn-home-export" class="outline-pill-btn">
+          <svg class="ic sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>バックアップ</span>
+        </button>
+        <label class="outline-pill-btn file-trigger">
+          <svg class="ic sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <span>復元 / 読込</span>
+          <input type="file" id="home-import-file" accept=".csv,.json,text/csv,application/json" hidden>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 第2段階：デッキ詳細 ==================== -->
+  <div id="view-deck" class="view-container hidden">
+    <header class="sub-header">
+      <button type="button" id="btn-back-home" class="nav-back-btn" aria-label="一覧へ戻る">
+        <svg class="ic" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        <span>一覧</span>
+      </button>
+      <h2 id="current-deck-title" class="sub-header-title">単語帳</h2>
+      <div class="sub-header-tools">
+        <button type="button" id="btn-move-deck-folder" class="icon-btn small" title="フォルダ移動" aria-label="フォルダ移動">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </button>
+        <button type="button" id="btn-rename-deck" class="icon-btn small" title="名前変更" aria-label="名前変更">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        </button>
+        <button type="button" id="btn-delete-deck" class="icon-btn small danger" title="削除" aria-label="削除">
+          <svg class="ic" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <nav class="segmented-tabs" role="tablist">
+      <button type="button" class="seg-tab active" data-tab="setup">学習</button>
+      <button type="button" class="seg-tab" data-tab="sheet">一覧</button>
+      <button type="button" class="seg-tab" data-tab="stats">成績</button>
+      <button type="button" class="seg-tab" data-tab="manage">管理</button>
+    </nav>
+
+    <!-- タブ1: 学習 / テスト設定 -->
+    <main id="panel-setup" class="tab-panel active">
+      <!-- 暗記 / テスト モード切替 -->
+      <div class="study-type-switch" role="tablist" aria-label="学習タイプ">
+        <button type="button" class="study-type-btn active" data-study-type="memorize">暗記</button>
+        <button type="button" class="study-type-btn" data-study-type="test">テスト</button>
+      </div>
+
+      <!-- メインスタートボタン -->
+      <div class="start-dock">
+        <button type="button" id="btn-start-study" class="cta-start-btn">
+          <span id="start-btn-main" class="start-btn-main">学習をスタート</span>
+          <span id="start-btn-badge" class="start-btn-badge"><span id="start-target-count">0</span> 問</span>
+        </button>
+        <button type="button" id="btn-restart-fresh" class="restart-fresh-btn hidden">
+          最初からやり直す
+        </button>
+      </div>
+
+      <!-- 単元フィルター -->
+      <div class="filter-strip">
+        <span class="filter-label">範囲</span>
+        <select id="category-filter" class="clean-select" aria-label="単元選択">
+          <option value="ALL">すべての単元</option>
+        </select>
+      </div>
+
+      <!-- 暗記モード専用：進行ルール（コンパクト2x2） -->
+      <div id="setup-memorize-block" class="group-block">
+        <div class="group-heading">進行</div>
+        <div class="mode-grid">
+          <button type="button" class="mode-chip active" data-mode="smart">
+            <span class="mode-chip-title">標準ループ</span>
+            <span class="mode-chip-meta">5問ごと復習</span>
+          </button>
+          <button type="button" class="mode-chip" data-mode="all">
+            <span class="mode-chip-title">全問通し</span>
+            <span class="mode-chip-meta">1周確認</span>
+          </button>
+          <button type="button" class="mode-chip" data-mode="weak">
+            <span class="mode-chip-title">苦手・★</span>
+            <span class="mode-chip-meta">誤答とピン</span>
+          </button>
+          <button type="button" class="mode-chip" data-mode="srs">
+            <span class="mode-chip-title">忘却曲線</span>
+            <span class="mode-chip-meta">復習期日順</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- テストモード専用：問題数＆採点タイミング -->
+      <div id="setup-test-block" class="test-setup-stack hidden">
+        <div class="group-block">
+          <div class="group-heading">出題数（ランダム）</div>
+          <div class="format-segment four-col">
+            <button type="button" class="test-count-btn active" data-count="10">10問</button>
+            <button type="button" class="test-count-btn" data-count="20">20問</button>
+            <button type="button" class="test-count-btn" data-count="30">30問</button>
+            <button type="button" class="test-count-btn" data-count="ALL">全問</button>
+          </div>
+        </div>
+
+        <div class="group-block">
+          <div class="group-heading">判定タイミング</div>
+          <div class="format-segment two-col">
+            <button type="button" class="test-grading-btn active" data-grading="instant">1問ごとに判定</button>
+            <button type="button" class="test-grading-btn" data-grading="batch">終了後にまとめて判定</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 出題形式 -->
+      <div class="group-block">
+        <div class="group-heading">形式</div>
+        <div class="format-segment">
+          <button type="button" class="fmt-seg-btn active" data-format="flip">カード</button>
+          <button type="button" class="fmt-seg-btn" data-format="choice">4択</button>
+          <button type="button" class="fmt-seg-btn" data-format="input">赤文字入力</button>
+        </div>
+      </div>
+
+      <!-- 出題オプション（1行・説明なし） -->
+      <div class="switch-list">
+        <label class="switch-row" for="opt-reverse">
+          <span class="switch-title">A → Q 反転</span>
+          <input type="checkbox" id="opt-reverse" class="ios-switch">
+        </label>
+
+        <label class="switch-row" id="row-opt-shuffle" for="opt-shuffle">
+          <span class="switch-title">シャッフル</span>
+          <input type="checkbox" id="opt-shuffle" class="ios-switch">
+        </label>
+
+        <label class="switch-row" for="opt-redsheet">
+          <span class="switch-title">赤シート</span>
+          <input type="checkbox" id="opt-redsheet" class="ios-switch">
+        </label>
+
+        <label class="switch-row hidden" id="row-opt-test-timer" for="opt-test-timer">
+          <span class="switch-title">経過時間を表示</span>
+          <input type="checkbox" id="opt-test-timer" class="ios-switch">
+        </label>
+      </div>
+
+      <!-- 詳細設定（折りたたみ） -->
+      <details class="advanced-details">
+        <summary class="advanced-summary">
+          <span>詳細設定</span>
+          <svg class="ic sm chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="advanced-body">
+          <div class="switch-list">
+            <div class="switch-col-block">
+              <label class="switch-row bare" for="opt-unordered">
+                <span class="switch-title">赤文字入力の順不同を許容</span>
+                <input type="checkbox" id="opt-unordered" class="ios-switch" checked>
+              </label>
+              <div id="unordered-delim-editor" class="delim-editor-box">
+                <div class="delim-editor-head">
+                  <span class="muted-small">区切り文字（スペース区切り）</span>
+                  <button type="button" id="btn-reset-delimiters" class="mini-link-btn">初期化</button>
+                </div>
+                <input type="text" id="input-unordered-delimiters" class="clean-input delim-input" placeholder="・ 、 , ／ / と や">
+              </div>
+            </div>
+          </div>
+
+          <div class="exam-strip">
+            <div class="exam-strip-left">
+              <span class="exam-label">試験日</span>
+              <span id="exam-countdown" class="exam-pill">未設定</span>
+            </div>
+            <input type="date" id="exam-date" class="date-picker">
+          </div>
+
+          <div class="danger-zone">
+            <button type="button" id="btn-reset-progress" class="text-danger-btn">この単語帳の学習履歴をリセット</button>
+          </div>
+        </div>
+      </details>
+    </main>
+
+    <!-- タブ2: 一覧シート -->
+    <section id="panel-sheet" class="tab-panel">
+      <div class="sheet-toolbar no-print">
+        <button type="button" id="sheet-redsheet-toggle" class="pill-action-btn rose">赤シート</button>
+        <button type="button" id="btn-print-sheet" class="pill-action-btn">印刷 / PDF</button>
+      </div>
+      <div id="sheet-list" class="sheet-container"></div>
+      <button type="button" id="sheet-load-more" class="outline-full-btn hidden no-print">さらに表示</button>
+    </section>
+
+    <!-- タブ3: 成績・分析 -->
+    <section id="panel-stats" class="tab-panel">
+      <div id="stats-container" class="kpi-grid"></div>
+      <div id="category-stats-container" class="group-block"></div>
+      <div id="stats-detail-container" class="stats-detail-section"></div>
+    </section>
+
+    <!-- タブ4: 追加・CSV管理 -->
+    <section id="panel-manage" class="tab-panel">
+      <div class="group-block">
+        <div class="row-between">
+          <div class="group-heading" style="margin: 0;">インポート・書き出し</div>
+          <button type="button" id="btn-download-sample-csv" class="mini-link-btn">見本CSV</button>
+        </div>
+
+        <div class="grid-2">
+          <label class="solid-action-btn primary file-trigger">
+            CSV / JSON 読込
+            <input type="file" id="import-csv-file" accept=".csv,.json,text/csv,application/json" hidden>
+          </label>
+          <button type="button" id="btn-export-csv" class="solid-action-btn">
+            この単語帳をCSV保存
+          </button>
+        </div>
+
+        <div class="grid-2">
+          <button type="button" id="btn-export-json" class="outline-full-btn">
+            完全バックアップ (JSON)
+          </button>
+          <button type="button" id="btn-export-all-csv" class="outline-full-btn">
+            全単語帳をCSV保存
+          </button>
+        </div>
+
+        <details class="csv-guide-details">
+          <summary class="csv-guide-summary">
+            <span>CSVの列形式を確認</span>
+            <svg class="ic sm chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+          </summary>
+          <div class="csv-guide-box">
+            <div class="csv-table-wrap">
+              <table class="csv-sample-table">
+                <thead>
+                  <tr><th>カテゴリ</th><th>問題(Q)</th><th>答え(A)</th><th>ヒント</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>英文法</td><td>appleの意味</td><td>【りんご】</td><td>赤い果物</td></tr>
+                  <tr><td>数学</td><td>円の面積</td><td>【$\pi r^2$】</td><td>半径 r</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </details>
+      </div>
+
+      <div class="group-block">
+        <div class="row-between">
+          <div class="group-heading" style="margin: 0;">テキスト一括追加</div>
+          <button type="button" id="btn-copy-prompt" class="mini-link-btn">AI用プロンプト</button>
+        </div>
+        <textarea id="import-text" class="clean-textarea" rows="4" placeholder="カテゴリ | 問題(Q) | 【重要語句】を含む答え(A) | ヒント"></textarea>
+        <button type="button" id="btn-import" class="solid-action-btn primary" style="width: 100%;">一括追加</button>
+      </div>
+
+      <div class="group-block">
+        <div class="group-heading">1問ずつ追加</div>
+        <div class="form-stack">
+          <input type="text" id="new-card-cat" class="clean-input" placeholder="カテゴリ">
+          <textarea id="new-card-front" class="clean-textarea" rows="2" placeholder="表面（Q）"></textarea>
+          <textarea id="new-card-back" class="clean-textarea" rows="2" placeholder="裏面（A）※【 】で赤シート対象"></textarea>
+          <input type="text" id="new-card-hint" class="clean-input" placeholder="ヒント（任意）">
+          <div class="row-between">
+            <label class="pill-action-btn file-trigger">
+              画像添付
+              <input type="file" id="new-card-image" accept="image/*" hidden>
+            </label>
+            <div class="image-preview-inline">
+              <span id="new-card-image-preview" class="muted-small">画像なし</span>
+              <button type="button" id="btn-clear-new-image" class="mini-link-btn hidden">削除</button>
+            </div>
+          </div>
+          <button type="button" id="btn-add-single" class="solid-action-btn" style="width: 100%;">追加</button>
+        </div>
+      </div>
+
+      <div class="group-block">
+        <div class="row-between">
+          <div class="group-heading" style="margin: 0;">登録カード <span id="manage-card-count" class="muted-small"></span></div>
+          <input type="search" id="manage-search" class="clean-input" placeholder="検索..." style="max-width: 170px; padding: 6px 10px;">
+        </div>
+        <div id="manage-card-list" class="manage-list"></div>
+        <button type="button" id="manage-load-more" class="outline-full-btn hidden">さらに表示</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ==================== 第3段階：学習・テスト集中画面 ==================== -->
+  <div id="view-study" class="study-screen hidden">
+    <header class="study-topbar">
+      <div class="study-topbar-row">
+        <button type="button" id="btn-exit-study" class="study-nav-btn" aria-label="終了">
+          <svg class="ic sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <span>終了</span>
+        </button>
+
+        <span id="study-timer-pill" class="timer-pill hidden">00:00</span>
+
+        <div class="study-tools">
+          <button type="button" id="btn-study-redsheet" class="redsheet-toggle-btn" title="赤シート切替">赤シート</button>
+          <button type="button" id="btn-undo" class="study-nav-btn undo-btn" title="1つ戻る" aria-label="1つ戻る">
+            <svg class="ic sm" viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-track">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <div class="progress-meta">
+          <span id="progress-text">1 / 1</span>
+          <span id="study-phase-badge" class="phase-pill"></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 復習モード突入オーバーレイ -->
+    <div id="review-interstitial" class="interstitial-overlay solid-bg hidden">
+      <div class="interstitial-box">
+        <div class="interstitial-icon-svg">
+          <svg class="ic xl" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </div>
+        <div class="interstitial-title">復習タイム</div>
+        <div id="review-count-label" class="interstitial-sub">間違えた 5問 を復習します</div>
+        <button type="button" id="btn-start-review" class="cta-start-btn" style="justify-content: center;">復習を始める</button>
+      </div>
+    </div>
+
+    <!-- 完了画面オーバーレイ -->
+    <div id="complete-interstitial" class="interstitial-overlay hidden">
+      <div class="interstitial-box">
+        <div class="interstitial-icon-svg success">
+          <svg class="ic xl" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="interstitial-title">学習完了</div>
+        <div id="complete-summary" class="interstitial-sub"></div>
+        <div class="interstitial-actions">
+          <button type="button" id="btn-restart-session" class="solid-action-btn primary">もう一度</button>
+          <button type="button" id="btn-complete-home" class="solid-action-btn">戻る</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- テスト結果オーバーレイ -->
+    <div id="test-result-overlay" class="result-overlay hidden">
+      <div class="result-sheet">
+        <div class="result-header">
+          <div class="result-score-wrap">
+            <div class="result-score-main" id="test-result-score">0 / 0</div>
+            <div class="result-score-meta">
+              <span id="test-result-acc">正答率 0%</span>
+              <span id="test-result-time" class="hidden"></span>
+            </div>
+          </div>
+          <div class="result-filter-seg">
+            <button type="button" id="btn-res-all" class="res-filter-btn active">すべて</button>
+            <button type="button" id="btn-res-wrong" class="res-filter-btn">× のみ</button>
+          </div>
+        </div>
+
+        <div id="test-result-list" class="result-list"></div>
+
+        <div class="result-footer">
+          <div class="result-primary-actions">
+            <button type="button" id="btn-retest-wrong" class="solid-action-btn primary">×だけ再テスト</button>
+            <button type="button" id="btn-pin-wrong" class="solid-action-btn">×に一括★ピン</button>
+          </div>
+          <button type="button" id="btn-result-home" class="text-subtle-btn">デッキへ戻る</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 中央フラッシュカード -->
+    <main id="study-main-area" class="study-main">
+      <div id="card-stage" class="flashcard-wrapper">
+        <div id="swipe-badge-left" class="swipe-indicator left">×</div>
+        <div id="swipe-badge-right" class="swipe-indicator right">◯</div>
+
+        <div id="card-flipper" class="flashcard-inner">
+          <!-- 表面 -->
+          <div id="card-front" class="card-face card-front">
+            <div class="card-face-header">
+              <span id="front-badge" class="side-badge">Q</span>
+              <span id="front-cat-tag" class="card-cat-tag"></span>
+              <div class="card-header-actions">
+                <button type="button" id="btn-speak-front" class="card-tool-btn speak-btn" aria-label="読み上げ" title="読み上げ">
+                  <svg class="ic sm" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                </button>
+                <button type="button" id="btn-pin-front" class="card-tool-btn pin-btn" aria-label="ピン留め" title="ピン留め">☆</button>
+                <button type="button" id="btn-edit-current-front" class="card-tool-btn" aria-label="このカードを編集" title="編集">
+                  <svg class="ic sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="card-scroll-body">
+              <img id="front-image" class="card-img hidden" alt="問題画像">
+              <div id="front-content" class="card-text"></div>
+            </div>
+            <div class="card-footer-slot">
+              <button type="button" id="btn-hint" class="hint-btn hidden">ヒント</button>
+              <div id="hint-text" class="hint-box hidden"></div>
+            </div>
+          </div>
+
+          <!-- 裏面 -->
+          <div id="card-back" class="card-face card-back">
+            <div class="card-face-header">
+              <span id="back-badge" class="side-badge back">A</span>
+              <span id="back-cat-tag" class="card-cat-tag"></span>
+              <div class="card-header-actions">
+                <button type="button" id="btn-speak-back" class="card-tool-btn speak-btn" aria-label="読み上げ" title="読み上げ">
+                  <svg class="ic sm" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                </button>
+                <button type="button" id="btn-pin-back" class="card-tool-btn pin-btn" aria-label="ピン留め" title="ピン留め">☆</button>
+                <button type="button" id="btn-edit-current-back" class="card-tool-btn" aria-label="このカードを編集" title="編集">
+                  <svg class="ic sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="card-scroll-body">
+              <img id="back-image" class="card-img hidden" alt="解答画像">
+              <div id="back-content" class="card-text"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 下部操作エリア -->
+    <footer id="study-bottom-area" class="study-bottom">
+      <div id="flip-controls" class="judge-row">
+        <button type="button" id="btn-wrong" class="judge-btn wrong" aria-label="まだ">
+          <span class="judge-symbol">×</span>
+        </button>
+        <button type="button" id="btn-correct" class="judge-btn correct" aria-label="覚えた">
+          <span class="judge-symbol">◯</span>
+        </button>
+      </div>
+
+      <div id="choice-container" class="choice-grid hidden"></div>
+
+      <div id="input-container" class="input-area hidden">
+        <div id="input-fields-list" class="input-fields-list"></div>
+        <div id="input-feedback" class="input-feedback hidden"></div>
+        <button type="button" id="btn-input-override" class="override-link-btn hidden">自分の答えを◯として記録</button>
+        <button type="button" id="btn-submit-answer" class="solid-action-btn primary" style="width: 100%;">判定する</button>
+        <button type="button" id="btn-input-next" class="solid-action-btn primary hidden" style="width: 100%;">次へ</button>
+        <div id="input-self-judge" class="judge-row hidden">
+          <button type="button" id="btn-input-self-wrong" class="judge-btn wrong" aria-label="まだ">
+            <span class="judge-symbol">×</span>
+          </button>
+          <button type="button" id="btn-input-self-correct" class="judge-btn correct" aria-label="覚えた">
+            <span class="judge-symbol">◯</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="batch-nav-bar" class="hidden">
+        <button type="button" id="btn-batch-next" class="solid-action-btn primary" style="width: 100%;">次へ</button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ==================== フォルダ移動モーダル ==================== -->
+  <div id="folder-move-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-title">フォルダに移動</div>
+      <div id="move-modal-deck-name" class="muted-small" style="margin-bottom: 12px;"></div>
+      <div id="folder-move-list" class="folder-choice-list"></div>
+      <button type="button" id="btn-move-create-folder" class="outline-full-btn" style="margin-top: 10px;">
+        ＋ 新しいフォルダを作成して移動
+      </button>
+      <div style="margin-top: 10px;">
+        <button type="button" id="btn-move-cancel" class="solid-action-btn" style="width: 100%;">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== カード編集モーダル ==================== -->
+  <div id="edit-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-title" style="margin-bottom: 10px;">カードを編集</div>
+      <div class="form-stack">
+        <input type="text" id="edit-card-cat" class="clean-input" placeholder="カテゴリ">
+        <textarea id="edit-card-front" class="clean-textarea" rows="3" placeholder="表面（Q）"></textarea>
+        <textarea id="edit-card-back" class="clean-textarea" rows="3" placeholder="裏面（A）"></textarea>
+        <input type="text" id="edit-card-hint" class="clean-input" placeholder="ヒント（任意）">
+        <div id="edit-card-image-wrap" class="edit-image-row">
+          <img id="edit-card-image-preview" class="edit-image-thumb hidden" alt="添付画像">
+          <div class="edit-image-actions">
+            <label class="pill-action-btn file-trigger">
+              画像を変更
+              <input type="file" id="edit-card-image" accept="image/*" hidden>
+            </label>
+            <button type="button" id="btn-edit-remove-image" class="mini-link-btn danger-link hidden">画像を削除</button>
+          </div>
+        </div>
+      </div>
+      <div class="interstitial-actions" style="margin-top: 14px;">
+        <button type="button" id="btn-edit-cancel" class="solid-action-btn">キャンセル</button>
+        <button type="button" id="btn-edit-save" class="solid-action-btn primary">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 汎用カスタムダイアログ ==================== -->
+  <div id="app-dialog-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div id="dialog-title" class="modal-title"></div>
+      <p id="dialog-message" class="dialog-message hidden"></p>
+      <input type="text" id="dialog-input" class="clean-input hidden" autocomplete="off">
+      <div id="dialog-actions" class="dialog-actions"></div>
+    </div>
+  </div>
+
+  <!-- ==================== 画像拡大ライトボックス ==================== -->
+  <div id="image-lightbox" class="lightbox-backdrop hidden" role="dialog" aria-label="画像拡大表示">
+    <img id="lightbox-img" class="lightbox-img" alt="拡大画像">
+  </div>
+
+  <!-- ==================== キーボードショートカット一覧 ==================== -->
+  <div id="shortcuts-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-title" style="margin-bottom: 12px;">キーボード操作</div>
+      <div class="shortcut-list">
+        <div class="shortcut-row"><span>めくる</span><kbd>Space</kbd> / <kbd>↑↓</kbd></div>
+        <div class="shortcut-row"><span>◯ / × 判定</span><kbd>→</kbd> / <kbd>←</kbd></div>
+        <div class="shortcut-row"><span>4択を選択</span><kbd>1</kbd>〜<kbd>4</kbd></div>
+        <div class="shortcut-row"><span>1つ戻る</span><kbd>Z</kbd> / <kbd>Backspace</kbd></div>
+        <div class="shortcut-row"><span>ヒント / ★ピン</span><kbd>H</kbd> / <kbd>S</kbd></div>
+        <div class="shortcut-row"><span>この画面を開く</span><kbd>?</kbd></div>
+      </div>
+      <button type="button" id="btn-shortcuts-close" class="solid-action-btn" style="width: 100%; margin-top: 14px;">閉じる</button>
+    </div>
+  </div>
+
+  <!-- ==================== トースト通知 ==================== -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

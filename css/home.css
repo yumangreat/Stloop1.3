@@ -1,0 +1,340 @@
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--brand);
+  color: #ffffff;
+  font-weight: 900;
+  font-size: 0.8rem;
+  display: grid;
+  place-items: center;
+  letter-spacing: -0.03em;
+}
+
+.brand-name {
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.streak-pill {
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--amber);
+  background: var(--amber-soft);
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+
+.home-hero {
+  padding: 2px 2px 0;
+}
+
+.hero-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* Folder Nav Bar */
+.folder-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 8px 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.folder-nav-center {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.folder-nav-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Folder Cards */
+.folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.folder-card {
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: 13px 16px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.14s ease;
+}
+
+.folder-card:active {
+  transform: scale(0.99);
+}
+
+.folder-card-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.folder-icon-box {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
+  color: var(--text-sub);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.folder-card-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.folder-card-title {
+  font-size: 0.98rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-card-meta {
+  margin-top: 2px;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.folder-card-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.folder-deck-badge {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text-sub);
+  background: var(--surface-muted);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
+/* Deck Cards */
+.deck-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.empty-folder-box {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 26px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.deck-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.14s ease;
+}
+
+.deck-card:active {
+  transform: scale(0.99);
+}
+
+.deck-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.deck-card-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.02rem;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.deck-card-right-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.deck-card-count {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 2px 6px;
+}
+
+.deck-tool-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-tint);
+  color: var(--text-sub);
+  display: inline-grid;
+  place-items: center;
+}
+
+.deck-play-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: none;
+  background: var(--brand-soft);
+  color: var(--brand);
+  display: inline-grid;
+  place-items: center;
+}
+
+.deck-card-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* Home Bottom Actions */
+.home-bottom-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.create-action-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.create-action-row.single {
+  grid-template-columns: 1fr;
+}
+
+.cta-primary-btn {
+  padding: 14px 18px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--brand);
+  color: #ffffff;
+  font-size: 0.94rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.cta-secondary-btn {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.backup-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.folder-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+
+.folder-choice-item {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-tint);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.folder-choice-item.active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 700;
+}
