@@ -754,3 +754,61 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Real-time & Summary Score Counts */
+.score-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-counter .sc-ok {
+  color: var(--cta);
+}
+
+.score-counter .sc-ng {
+  color: var(--wrong);
+}
+
+.complete-score-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.complete-score-pill {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.complete-score-pill.ok {
+  background: var(--correct-soft, rgba(16, 185, 129, 0.12));
+  color: var(--cta);
+}
+
+.complete-score-pill.ng {
+  background: var(--wrong-soft);
+  color: var(--wrong);
+}
+
+.result-score-meta {
+  flex-wrap: wrap;
+  row-gap: 3px;
+}
+
+.result-breakdown {
+  color: var(--text);
+  font-weight: 800;
+}

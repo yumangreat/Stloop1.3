@@ -57,17 +57,14 @@ export function createDeckView(ctx) {
   function syncControlsFromSettings() {
     const s = ctx.settings;
     const isTest = s.studyType === 'test';
+    const activeChipMode = isTest ? 'test' : s.mode;
 
-    document.querySelectorAll('.study-type-btn').forEach((b) => {
-      b.classList.toggle('active', b.dataset.studyType === s.studyType);
-    });
-    $('setup-memorize-block')?.classList.toggle('hidden', isTest);
     $('setup-test-block')?.classList.toggle('hidden', !isTest);
     $('row-opt-shuffle')?.classList.toggle('hidden', isTest);
     $('row-opt-test-timer')?.classList.toggle('hidden', !isTest);
 
     document.querySelectorAll('.mode-chip').forEach((b) => {
-      b.classList.toggle('active', b.dataset.mode === s.mode);
+      b.classList.toggle('active', b.dataset.mode === activeChipMode);
     });
     document.querySelectorAll('.fmt-seg-btn').forEach((b) => {
       b.classList.toggle('active', b.dataset.format === s.format);
@@ -92,6 +89,10 @@ export function createDeckView(ctx) {
       b.classList.toggle('active', b.dataset.grading === s.testGrading);
     });
 
+    const favEl = $('opt-filter-fav');
+    if (favEl) favEl.checked = Boolean(s.filterFavorites);
+    const wrongEl = $('opt-filter-wrong');
+    if (wrongEl) wrongEl.checked = Boolean(s.filterWrong);
     const revEl = $('opt-reverse');
     if (revEl) revEl.checked = Boolean(s.reverse);
     const shufEl = $('opt-shuffle');
@@ -448,17 +449,6 @@ export function createDeckView(ctx) {
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
 
-    // 暗記 / テスト切替
-    document.querySelectorAll('.study-type-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        ctx.haptic(8);
-        ctx.settings.studyType = btn.dataset.studyType;
-        ctx.savePreferences();
-        syncControlsFromSettings();
-        updateStartButton();
-      });
-    });
-
     $('category-filter')?.addEventListener('change', (e) => {
       ctx.settings.category = e.target.value;
       updateStartButton();
@@ -467,7 +457,13 @@ export function createDeckView(ctx) {
     document.querySelectorAll('.mode-chip').forEach((btn) => {
       btn.addEventListener('click', () => {
         ctx.haptic(8);
-        ctx.settings.mode = btn.dataset.mode;
+        const target = btn.dataset.mode;
+        if (target === 'test') {
+          ctx.settings.studyType = 'test';
+        } else {
+          ctx.settings.studyType = 'memorize';
+          ctx.settings.mode = target;
+        }
         ctx.savePreferences();
         syncControlsFromSettings();
         updateStartButton();
@@ -522,6 +518,20 @@ export function createDeckView(ctx) {
         syncControlsFromSettings();
         updateStartButton();
       });
+    });
+
+    $('opt-filter-fav')?.addEventListener('change', (e) => {
+      ctx.settings.filterFavorites = e.target.checked;
+      ctx.savePreferences();
+      ctx.haptic(8);
+      updateStartButton();
+    });
+
+    $('opt-filter-wrong')?.addEventListener('change', (e) => {
+      ctx.settings.filterWrong = e.target.checked;
+      ctx.savePreferences();
+      ctx.haptic(8);
+      updateStartButton();
     });
 
     $('opt-reverse')?.addEventListener('change', (e) => {

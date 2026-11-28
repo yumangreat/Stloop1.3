@@ -1,4 +1,4 @@
-const CACHE_NAME = 'studyloop-v2.1.1';
+const CACHE_NAME = 'studyloop-v2.3.0';
 const APP_ASSETS = [
   './',
   './index.html',
@@ -23,7 +23,7 @@ const APP_ASSETS = [
   './js/speech.js',
   './js/backup.js',
   './js/share-service.js',
-  './js/gist-sync.js',
+  './js/firebase-sync.js',
   './js/views/modal.js',
   './js/views/home-view.js',
   './js/views/deck-view.js',

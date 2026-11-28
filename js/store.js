@@ -28,9 +28,11 @@ export function normalizeTestCount(val) {
 export function defaultPreferences() {
   return {
     studyType: 'memorize', // 'memorize' | 'test'
-    mode: 'smart',         // 'smart' | 'all' | 'weak' | 'srs'
+    mode: 'smart',         // 'smart' | 'all' | 'srs'
     format: 'flip',        // 'flip' | 'choice' | 'input'
     category: 'ALL',
+    filterFavorites: false,
+    filterWrong: false,
     reverse: false,
     shuffle: false,
     redsheet: false,
@@ -136,8 +138,16 @@ function hydrateData(parsed) {
 
   const prefs = { ...defaultPreferences(), ...(parsed.preferences || {}) };
   if (!['memorize', 'test'].includes(prefs.studyType)) prefs.studyType = 'memorize';
-  if (!['smart', 'all', 'weak', 'srs'].includes(prefs.mode)) prefs.mode = 'smart';
+  // Migrate legacy 'weak' mode into filter toggles
+  if (prefs.mode === 'weak') {
+    prefs.mode = 'smart';
+    prefs.filterFavorites = true;
+    prefs.filterWrong = true;
+  }
+  if (!['smart', 'all', 'srs'].includes(prefs.mode)) prefs.mode = 'smart';
   if (!['flip', 'choice', 'input'].includes(prefs.format)) prefs.format = 'flip';
+  prefs.filterFavorites = Boolean(prefs.filterFavorites);
+  prefs.filterWrong = Boolean(prefs.filterWrong);
   prefs.testCount = normalizeTestCount(prefs.testCount);
   if (!['instant', 'batch'].includes(prefs.testGrading)) prefs.testGrading = 'instant';
 

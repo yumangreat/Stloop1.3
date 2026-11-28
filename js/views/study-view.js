@@ -49,6 +49,8 @@ export function createStudyView(ctx) {
     wrongPool: [],
     reviewQueue: [],
     reviewIndex: 0,
+    sessionCorrect: 0,
+    sessionWrong: 0,
 
     // Test state
     testGrading: 'instant', // 'instant' | 'batch'
@@ -157,6 +159,8 @@ export function createStudyView(ctx) {
       format: ctx.settings.format,
       mode: ctx.settings.mode,
       category: ctx.settings.category,
+      filterFavorites: Boolean(ctx.settings.filterFavorites),
+      filterWrong: Boolean(ctx.settings.filterWrong),
       reverse: ctx.settings.reverse,
       shuffle: ctx.settings.shuffle,
       phase: session.phase,
@@ -166,6 +170,8 @@ export function createStudyView(ctx) {
       wrongPool: [...session.wrongPool],
       reviewQueue: [...session.reviewQueue],
       reviewIndex: session.reviewIndex,
+      sessionCorrect: session.sessionCorrect,
+      sessionWrong: session.sessionWrong,
       isFlipped: Boolean(session.isFlipped),
       updatedAt: Date.now()
     };
@@ -197,6 +203,8 @@ export function createStudyView(ctx) {
     ctx.settings.format = saved.format;
     ctx.settings.mode = saved.mode;
     ctx.settings.category = saved.category;
+    ctx.settings.filterFavorites = Boolean(saved.filterFavorites);
+    ctx.settings.filterWrong = Boolean(saved.filterWrong);
     ctx.settings.reverse = saved.reverse;
     ctx.settings.shuffle = saved.shuffle;
     ctx.savePreferences();
@@ -212,6 +220,8 @@ export function createStudyView(ctx) {
     session.wrongPool = [...saved.wrongPool];
     session.reviewQueue = [...saved.reviewQueue];
     session.reviewIndex = saved.reviewIndex;
+    session.sessionCorrect = Math.max(0, Number(saved.sessionCorrect || 0));
+    session.sessionWrong = Math.max(0, Number(saved.sessionWrong || 0));
     session.isFlipped = false;
     session.answeredCurrent = false;
     session.awaitingSelfJudge = false;
@@ -262,6 +272,8 @@ export function createStudyView(ctx) {
     session.wrongPool = [];
     session.reviewQueue = [];
     session.reviewIndex = 0;
+    session.sessionCorrect = 0;
+    session.sessionWrong = 0;
     session.isFlipped = false;
     session.answeredCurrent = false;
     session.awaitingSelfJudge = false;
@@ -382,6 +394,25 @@ export function createStudyView(ctx) {
 
     $('progress-fill').style.width = `${Math.min(100, Math.round((cur / total) * 100))}%`;
     $('progress-text').textContent = `${cur} / ${total}`;
+
+    const scoreCounterEl = $('study-score-counter');
+    if (scoreCounterEl) {
+      if (batch) {
+        scoreCounterEl.classList.add('hidden');
+      } else {
+        scoreCounterEl.classList.remove('hidden');
+        const okCount = session.kind === 'test'
+          ? session.testRecords.filter((r) => r.isCorrect).length
+          : session.sessionCorrect;
+        const ngCount = session.kind === 'test'
+          ? session.testRecords.filter((r) => !r.isCorrect).length
+          : session.sessionWrong;
+        const okEl = $('study-ok-count');
+        const ngEl = $('study-ng-count');
+        if (okEl) okEl.textContent = String(okCount);
+        if (ngEl) ngEl.textContent = String(ngCount);
+      }
+    }
 
     // Undo / Prev button tooltip
     const undoBtn = $('btn-undo');
@@ -929,6 +960,8 @@ export function createStudyView(ctx) {
       wrongPool: [...session.wrongPool],
       reviewQueue: [...session.reviewQueue],
       reviewIndex: session.reviewIndex,
+      sessionCorrect: session.sessionCorrect,
+      sessionWrong: session.sessionWrong,
       cardId: card.id,
       cardStats: {
         correctCount: card.correctCount,
@@ -939,6 +972,8 @@ export function createStudyView(ctx) {
     });
 
     applySrsUpdate(card, isCorrect);
+    if (isCorrect) session.sessionCorrect += 1;
+    else session.sessionWrong += 1;
     recordDailyActivity(ctx.appData, 1);
     ctx.save();
 
@@ -1011,7 +1046,13 @@ export function createStudyView(ctx) {
     ctx.appData.activeStudy = null;
     ctx.save();
 
-    $('complete-summary').textContent = `${deck ? deck.title : ''} を完了しました`;
+    const totalJudged = session.sessionCorrect + session.sessionWrong;
+    const acc = totalJudged > 0 ? Math.round((session.sessionCorrect / totalJudged) * 100) : 0;
+    $('complete-summary').textContent = `${deck ? deck.title : ''} を完了しました（正答率 ${acc}%）`;
+    const cOk = $('complete-ok-count');
+    const cNg = $('complete-ng-count');
+    if (cOk) cOk.textContent = String(session.sessionCorrect);
+    if (cNg) cNg.textContent = String(session.sessionWrong);
     $('complete-interstitial').classList.remove('hidden');
     ctx.haptic(20);
   }
@@ -1026,7 +1067,10 @@ export function createStudyView(ctx) {
     const correct = session.testRecords.filter((r) => r.isCorrect).length;
     const acc = total > 0 ? Math.round((correct / total) * 100) : 0;
 
+    const wrongCount = total - correct;
     $('test-result-score').textContent = `${correct} / ${total}`;
+    const breakdownEl = $('test-result-breakdown');
+    if (breakdownEl) breakdownEl.textContent = `正解 ${correct}問 / 間違い ${wrongCount}問`;
     $('test-result-acc').textContent = `正答率 ${acc}%`;
 
     const timeEl = $('test-result-time');
@@ -1038,7 +1082,6 @@ export function createStudyView(ctx) {
       timeEl?.classList.add('hidden');
     }
 
-    const wrongCount = total - correct;
     const retestBtn = $('btn-retest-wrong');
     const pinBtn = $('btn-pin-wrong');
     if (retestBtn) {
@@ -1151,6 +1194,8 @@ export function createStudyView(ctx) {
     session.wrongPool = snap.wrongPool;
     session.reviewQueue = snap.reviewQueue;
     session.reviewIndex = snap.reviewIndex;
+    if (typeof snap.sessionCorrect === 'number') session.sessionCorrect = snap.sessionCorrect;
+    if (typeof snap.sessionWrong === 'number') session.sessionWrong = snap.sessionWrong;
 
     $('review-interstitial').classList.add('hidden');
     $('complete-interstitial').classList.add('hidden');

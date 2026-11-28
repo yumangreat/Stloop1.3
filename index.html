@@ -131,12 +131,6 @@
 
     <!-- タブ1: 学習 / テスト設定 -->
     <main id="panel-setup" class="tab-panel active">
-      <!-- 暗記 / テスト モード切替 -->
-      <div class="study-type-switch" role="tablist" aria-label="学習タイプ">
-        <button type="button" class="study-type-btn active" data-study-type="memorize">暗記</button>
-        <button type="button" class="study-type-btn" data-study-type="test">テスト</button>
-      </div>
-
       <!-- メインスタートボタン -->
       <div class="start-dock">
         <button type="button" id="btn-start-study" class="cta-start-btn">
@@ -156,25 +150,21 @@
         </select>
       </div>
 
-      <!-- 暗記モード専用：進行ルール（コンパクト2x2） -->
-      <div id="setup-memorize-block" class="group-block">
+      <!-- 進行ルール（2x2：5問ごとに振り返り / 単語カード / 忘却曲線 / テスト） -->
+      <div id="setup-mode-block" class="group-block">
         <div class="group-heading">進行</div>
         <div class="mode-grid">
           <button type="button" class="mode-chip active" data-mode="smart">
-            <span class="mode-chip-title">標準ループ</span>
-            <span class="mode-chip-meta">5問ごと復習</span>
+            <span class="mode-chip-title">5問ごとに振り返り</span>
           </button>
           <button type="button" class="mode-chip" data-mode="all">
-            <span class="mode-chip-title">全問通し</span>
-            <span class="mode-chip-meta">1周確認</span>
-          </button>
-          <button type="button" class="mode-chip" data-mode="weak">
-            <span class="mode-chip-title">苦手・★</span>
-            <span class="mode-chip-meta">誤答とピン</span>
+            <span class="mode-chip-title">単語カード</span>
           </button>
           <button type="button" class="mode-chip" data-mode="srs">
             <span class="mode-chip-title">忘却曲線</span>
-            <span class="mode-chip-meta">復習期日順</span>
+          </button>
+          <button type="button" class="mode-chip" data-mode="test">
+            <span class="mode-chip-title">テスト</span>
           </button>
         </div>
       </div>
@@ -216,6 +206,16 @@
 
       <!-- 出題オプション（1行・説明なし） -->
       <div class="switch-list">
+        <label class="switch-row" for="opt-filter-fav">
+          <span class="switch-title">お気に入り</span>
+          <input type="checkbox" id="opt-filter-fav" class="ios-switch">
+        </label>
+
+        <label class="switch-row" for="opt-filter-wrong">
+          <span class="switch-title">間違えた問題</span>
+          <input type="checkbox" id="opt-filter-wrong" class="ios-switch">
+        </label>
+
         <label class="switch-row" for="opt-reverse">
           <span class="switch-title">A → Q 反転</span>
           <input type="checkbox" id="opt-reverse" class="ios-switch">
@@ -405,6 +405,10 @@
           <div id="progress-fill" class="progress-fill"></div>
         </div>
         <div class="progress-meta">
+          <span id="study-score-counter" class="score-counter">
+            <span class="sc-ok">◯ <span id="study-ok-count">0</span></span>
+            <span class="sc-ng">× <span id="study-ng-count">0</span></span>
+          </span>
           <span id="progress-text">1 / 1</span>
           <span id="study-phase-badge" class="phase-pill"></span>
         </div>
@@ -431,6 +435,10 @@
         </div>
         <div class="interstitial-title">学習完了</div>
         <div id="complete-summary" class="interstitial-sub"></div>
+        <div id="complete-score-row" class="complete-score-row">
+          <span class="complete-score-pill ok">正解 <strong id="complete-ok-count">0</strong>問</span>
+          <span class="complete-score-pill ng">間違い <strong id="complete-ng-count">0</strong>問</span>
+        </div>
         <div class="interstitial-actions">
           <button type="button" id="btn-restart-session" class="solid-action-btn primary">もう一度</button>
           <button type="button" id="btn-complete-home" class="solid-action-btn">戻る</button>
@@ -445,6 +453,7 @@
           <div class="result-score-wrap">
             <div class="result-score-main" id="test-result-score">0 / 0</div>
             <div class="result-score-meta">
+              <span id="test-result-breakdown" class="result-breakdown">正解 0問 / 間違い 0問</span>
               <span id="test-result-acc">正答率 0%</span>
               <span id="test-result-time" class="hidden"></span>
             </div>
@@ -732,41 +741,32 @@
     </div>
   </div>
 
-  <!-- ==================== GitHub Gist クラウド同期モーダル ==================== -->
+  <!-- ==================== Google クラウド同期モーダル ==================== -->
   <div id="sync-modal" class="modal-backdrop hidden">
     <div class="modal-card wide">
       <div class="modal-header-row">
-        <div class="modal-title">クラウド同期（GitHub Gist）</div>
+        <div class="modal-title">クラウド同期（Google）</div>
         <button type="button" id="btn-sync-close" class="modal-close-btn" aria-label="閉じる">
           <svg class="ic sm" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
       <div class="modal-scroll-body">
-        <!-- 未接続 -->
+        <!-- 未ログイン -->
         <div id="sync-setup-section" class="form-stack">
-          <input type="password" id="sync-token-input" class="clean-input" placeholder="GitHub Personal Access Token (gist権限)" autocomplete="off">
-          <button type="button" id="btn-sync-connect" class="solid-action-btn primary" style="width: 100%;">接続して同期</button>
-
-          <details class="advanced-details">
-            <summary class="advanced-summary">
-              <span>トークン発行手順（初回のみ・無料）</span>
-              <svg class="ic sm chevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
-            </summary>
-            <ol class="sync-guide-steps">
-              <li>GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) を開く</li>
-              <li>「Generate new token (classic)」を押す</li>
-              <li>スコープで <strong>gist</strong> のみにチェックを入れて発行</li>
-              <li>表示されたトークンを上の欄に貼り付ける（2台目も同じトークンを入れるだけで自動検出されます）</li>
-            </ol>
-          </details>
+          <p class="sync-setup-desc">Googleアカウントでログインすると、スマホ・iPad・PCの間で単語帳や学習履歴を自動で同期できます。</p>
+          <button type="button" id="btn-sync-google" class="google-signin-btn">
+            <svg class="google-g-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"/></svg>
+            <span>Google でログイン</span>
+          </button>
         </div>
 
-        <!-- 接続済み -->
+        <!-- ログイン済み -->
         <div id="sync-connected-section" class="form-stack hidden">
           <div class="sync-status-card">
             <div>
-              <div id="sync-account-label" class="sync-status-main">接続済み</div>
+              <div id="sync-account-label" class="sync-status-main">ログイン済み</div>
+              <div id="sync-account-email" class="sync-status-sub hidden"></div>
               <div id="sync-last-time" class="sync-status-sub">未同期</div>
             </div>
             <button type="button" id="btn-sync-now" class="solid-action-btn primary">今すぐ同期</button>
@@ -785,7 +785,7 @@
           </div>
 
           <div class="danger-zone">
-            <button type="button" id="btn-sync-disconnect" class="text-danger-btn">この端末の同期を解除</button>
+            <button type="button" id="btn-sync-disconnect" class="text-danger-btn">ログアウト</button>
           </div>
         </div>
       </div>

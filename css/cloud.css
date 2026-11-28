@@ -371,3 +371,43 @@
   line-height: 1.6;
   color: var(--text-sub);
 }
+
+/* Googleログインボタン */
+.google-signin-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.14s, transform 0.1s;
+}
+
+.google-signin-btn:active {
+  transform: scale(0.985);
+}
+
+.google-signin-btn:disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.google-g-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.sync-setup-desc {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-sub);
+}

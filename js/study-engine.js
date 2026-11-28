@@ -9,19 +9,29 @@ export function shuffleArray(list) {
   return arr;
 }
 
-export function getFilteredCards(deck, { category = 'ALL', mode = 'smart', studyType = 'memorize' }) {
+export function isCardWrong(card) {
+  if (!card) return false;
+  return card.wrongCount > card.correctCount || (card.wrongCount > 0 && card.srsLevel === 0);
+}
+
+export function getFilteredCards(deck, {
+  category = 'ALL',
+  mode = 'smart',
+  studyType = 'memorize',
+  filterFavorites = false,
+  filterWrong = false
+}) {
   if (!deck || !Array.isArray(deck.cards)) return [];
   const now = Date.now();
   let list = [...deck.cards];
   if (category && category !== 'ALL') {
     list = list.filter((c) => (c.category || '一般') === category);
   }
-  if (studyType === 'memorize') {
-    if (mode === 'weak') {
-      list = list.filter((c) => c.wrongCount > c.correctCount || c.pinned);
-    } else if (mode === 'srs') {
-      list = list.filter((c) => !c.nextReview || c.nextReview <= now);
-    }
+  if (filterFavorites || filterWrong) {
+    list = list.filter((c) => (filterFavorites && c.pinned) || (filterWrong && isCardWrong(c)));
+  }
+  if (studyType === 'memorize' && mode === 'srs') {
+    list = list.filter((c) => !c.nextReview || c.nextReview <= now);
   }
   return list;
 }
@@ -101,8 +111,10 @@ export function getValidSavedSession(appData, deckId, format) {
   return {
     deckId,
     format,
-    mode: ['smart', 'all', 'weak', 'srs'].includes(raw.mode) ? raw.mode : 'smart',
+    mode: ['smart', 'all', 'srs'].includes(raw.mode) ? raw.mode : 'smart',
     category: typeof raw.category === 'string' ? raw.category : 'ALL',
+    filterFavorites: Boolean(raw.filterFavorites),
+    filterWrong: Boolean(raw.filterWrong),
     reverse: Boolean(raw.reverse),
     shuffle: Boolean(raw.shuffle),
     phase,
@@ -112,6 +124,8 @@ export function getValidSavedSession(appData, deckId, format) {
     wrongPool,
     reviewQueue,
     reviewIndex,
+    sessionCorrect: Math.max(0, Number(raw.sessionCorrect || 0)),
+    sessionWrong: Math.max(0, Number(raw.sessionWrong || 0)),
     isFlipped: Boolean(raw.isFlipped),
     updatedAt: Number(raw.updatedAt || Date.now())
   };
@@ -122,6 +136,8 @@ export function savedMatchesSettings(saved, settings) {
   return (
     saved.mode === settings.mode &&
     saved.category === settings.category &&
+    Boolean(saved.filterFavorites) === Boolean(settings.filterFavorites) &&
+    Boolean(saved.filterWrong) === Boolean(settings.filterWrong) &&
     Boolean(saved.reverse) === Boolean(settings.reverse) &&
     Boolean(saved.shuffle) === Boolean(settings.shuffle)
   );

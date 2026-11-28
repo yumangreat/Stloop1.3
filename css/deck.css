@@ -180,13 +180,15 @@
 }
 
 .mode-chip {
-  padding: 11px 13px;
+  padding: 13px 10px;
   border-radius: var(--radius-md);
   border: 1.5px solid var(--border);
   background: var(--surface);
-  text-align: left;
+  text-align: center;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 2px;
   transition: border-color 0.14s, background 0.14s;
 }
